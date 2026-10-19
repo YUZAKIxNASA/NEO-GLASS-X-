@@ -4,7 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
-private val NeonWaveColorScheme = darkColorScheme(
+private val NeoGlassXColorScheme = darkColorScheme(
   primary = VioletGaze,
   onPrimary = TextPrimary,
   primaryContainer = IndigoAura,
@@ -25,23 +25,32 @@ private val NeonWaveColorScheme = darkColorScheme(
   outlineVariant = GlassBorderSubtle,
 )
 
+private val NeonWaveColorScheme = NeoGlassXColorScheme
+
 @Composable
-fun NeonWaveTheme(
+fun NeoGlassXTheme(
   content: @Composable () -> Unit,
 ) {
   MaterialTheme(
-    colorScheme = NeonWaveColorScheme,
+    colorScheme = NeoGlassXColorScheme,
     typography = Typography,
     content = content
   )
 }
 
-// Alias for backwards compatibility
+// Aliases for backwards compatibility
+@Composable
+fun NeonWaveTheme(
+  content: @Composable () -> Unit,
+) {
+  NeoGlassXTheme(content = content)
+}
+
 @Composable
 fun MyApplicationTheme(
   darkTheme: Boolean = true,
   dynamicColor: Boolean = false,
   content: @Composable () -> Unit,
 ) {
-  NeonWaveTheme(content = content)
+  NeoGlassXTheme(content = content)
 }

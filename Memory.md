@@ -1,27 +1,37 @@
-# NEONWAVE — Project Continuity & Memory Record
+# NEO GLASS X — Project Continuity & Memory Record
 
 ## 1. Project Identity & Status
-- **Project Name**: NEONWAVE
-- **Status**: Production Aurora Glass Clean State (Zero Demo Data, Clean Header)
-- **Last Verified Build**: `compile_applet` — **BUILD SUCCEEDED**
-- **Last Verified Tests**: `gradle :app:testDebugUnitTest` executed on 2026-10-18T19:36:47Z — **BUILD SUCCESSFUL** (33 actionable tasks executed, 0 failures).
+- **Project Name**: NEO GLASS X
+- **Project Owner**: YUZAKI NASA
+- **Platform**: Android native (Kotlin + Jetpack Compose)
+- **Status**: Production Aurora Glass Clean State (Zero Demo Data, Pure MP3 Audio Downloader, Lossless Media Player)
+- **Brand Consistency**: Display name "NEO GLASS X" synchronized across launcher label (`strings.xml`), platform metadata (`metadata.json`), build configuration (`settings.gradle.kts`), and UI headers.
 
 ---
 
-## 2. Changes Applied per User Request
-1. **Header Clean-up (Screenshot 1)**:
-   - Removed the notification bell and red alert badge.
-   - Removed the face portrait avatar image from `HomeHeader`.
-   - Replaced with a clean, functional Quick Search shortcut button.
-2. **Elimination of All Demo / Mock Data (Screenshot 2)**:
-   - Removed all 8 pre-seeded mock tracks from `TrackRepository.kt` (`seedInitialDataIfEmpty()` removed; `clearDemoTracksIfAny()` added).
-   - Bumped `AppDatabase` version to 2 with `fallbackToDestructiveMigration()` to purge any cached demo records.
-   - Removed sample URL chips ("Vivaldi", "Chopin", "Debussy") from `DownloaderScreen.kt`.
-   - Removed static fake track fallback in `HomeScreen.kt`. When no tracks have been downloaded, `HomeScreen` and `LibraryScreen` now display clean, honest empty state cards with direct calls-to-action to open the Downloader.
-   - When tracks are downloaded using real web URLs in `DownloaderScreen`, they are saved to local storage, committed to Room, and populated in the library and playback queue.
+## 2. Core Functional Architectural Integrity
+1. **Application Identity & UI Header**:
+   - Launcher and display label: "NEO GLASS X".
+   - Brand headers in Home, Downloader, and Library display "NEO GLASS X".
+   - Clean header with grid navigation and instant search.
+2. **MP3 Downloader Repair & MP4 Deprecation**:
+   - Completely removed all MP4, 1080p, 720p, and video download options.
+   - Stream validation: HEAD request with fallback to byte-range GET (`Range: bytes=0-1023`).
+   - Webpage (HTML) links rejected with direct diagnostic message.
+   - Download validation: ID3v2 and MPEG frame sync word (`0xFFE0`) verification ensures only genuine MP3 files are accepted and indexed.
+   - Direct audio indexed into Room Database and app-specific Music storage.
+3. **Audio Playback Engine**:
+   - High-fidelity Android `MediaPlayer` wrapped in `PlaybackManager`.
+   - AudioFocus handling via `AudioFocusRequest` (API 26+) and legacy listener.
+   - Full scrubber seeking, real duration calculation, shuffle, and repeat modes (OFF, ALL, ONE).
+   - Docked persistent mini-player and fullscreen immersive player with visualizer equalizer bars and queue sheet.
+4. **Zero Mock Data Policy**:
+   - All demo tracks purged.
+   - Pure real storage persistence via Room.
+   - Honest empty states with CTA to open Downloader when library has no downloaded tracks.
 
 ---
 
 ## 3. Test & Verification Log
 - `compile_applet`: **BUILD SUCCEEDED**
-- `gradle :app:testDebugUnitTest`: **BUILD SUCCESSFUL in 29s** (0 test failures).
+- `gradle :app:testDebugUnitTest`: **BUILD SUCCESSFUL in 46s** (33 actionable tasks executed, 0 failures, all 11 unit & Robolectric tests passing).

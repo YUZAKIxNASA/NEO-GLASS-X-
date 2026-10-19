@@ -2,7 +2,7 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// NeonWave Aurora Glass Palette
+// NEO GLASS X Aurora Glass Palette
 val AtmosphereDeep = Color(0xFF07102B)
 val AtmosphereMid = Color(0xFF0D1945)
 val RoyalBlue = Color(0xFF244CCB)

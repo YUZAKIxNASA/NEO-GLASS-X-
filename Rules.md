@@ -1,8 +1,8 @@
-# NEONWAVE — Mandatory Development Rules
+# NEO GLASS X — Mandatory Development Rules
 
 ## 1. Absolute Integrity Rules
 
-1. **NO DEMO APPLICATIONS**: Never create demo screens, prototype sandboxes, preview-only mockups, static sample dashboards, or duplicate screens. All code must belong to the real, functional NEONWAVE application.
+1. **NO DEMO APPLICATIONS**: Never create demo screens, prototype sandboxes, preview-only mockups, static sample dashboards, or duplicate screens. All code must belong to the real, functional NEO GLASS X application.
 2. **NO MOCK DATA REPLACING REAL APPLICATION DATA**: Display genuine tracks, real metadata, and actual storage files. Never populate empty libraries with fabricated sample songs. Always display honest empty states when data is unavailable.
 3. **NO FAKE BUTTONS OR SIMULATED FUNCTIONALITY**: Every visible interactive control must perform its actual intended action:
    - Play/pause must control the real playback engine.
@@ -18,20 +18,21 @@
 ## 2. Preservation & Stability Rules
 
 5. **PRESERVE EXISTING FUNCTIONALITY**: Do not remove, replace, or break working functionality, existing audio sources, download pipelines, or database schemas.
-6. **NO UNNECESSARY REWRITES OR DUPLICATE COMPONENTS**: Reuse existing components, state managers, and utility classes in place. Never create parallel duplicates.
-7. **NO UNDOCUMENTED API CONTRACT CHANGES**: Any modification to data models, DAO interfaces, or network contracts must be documented first in `Architecture.md` and approved.
-8. **ISOLATE UI WORK FROM CORE MEDIA LOGIC**: When refining presentation or styling, do not make arbitrary changes to media processing, download streams, or playback internals.
-9. **PRESERVE MEDIA CONTROLS & TIMERS**: Audio playback must retain seeking, actual duration calculation, repeat modes, shuffle sequencing, and audio session binding.
+6. **AUDIO FOCUS ONLY**: The application strictly focuses on high-fidelity audio playback and direct MP3 downloads. No MP4/video download options.
+7. **NO UNNECESSARY REWRITES OR DUPLICATE COMPONENTS**: Reuse existing components, state managers, and utility classes in place. Never create parallel duplicates.
+8. **NO UNDOCUMENTED API CONTRACT CHANGES**: Any modification to data models, DAO interfaces, or network contracts must be documented first in `Architecture.md`.
+9. **ISOLATE UI WORK FROM CORE MEDIA LOGIC**: When refining presentation or styling, do not make arbitrary changes to media processing, download streams, or playback internals.
+10. **PRESERVE MEDIA CONTROLS & TIMERS**: Audio playback must retain seeking, actual duration calculation, repeat modes, shuffle sequencing, and audio session binding.
 
 ---
 
 ## 3. Engineering & Verification Discipline
 
-10. **VERIFIED EXECUTION ONLY**: Never claim a Gradle build, compilation, or test passed without actual execution and verified terminal output.
-11. **INSPECT BEFORE MODIFYING**: Always read the target file (`view_file`) and inspect dependencies before making changes.
-12. **MINIMAL TARGETED EDITS**: Make the smallest targeted change that solves the problem. Avoid mass refactoring across unrelated subsystems.
-13. **TRANSPARENT REPORTING**: In every response, report:
+11. **VERIFIED EXECUTION ONLY**: Never claim a Gradle build, compilation, or test passed without actual execution and verified terminal output.
+12. **INSPECT BEFORE MODIFYING**: Always read the target file (`view_file`) and inspect dependencies before making changes.
+13. **MINIMAL TARGETED EDITS**: Make the smallest targeted change that solves the problem. Avoid mass refactoring across unrelated subsystems.
+14. **TRANSPARENT REPORTING**: In every response, report:
     - Exactly which files were created or modified.
     - Actual test or build commands executed and their direct outputs.
     - Any unverified or partially verified behaviors.
-14. **PLATFORM SYNCHRONIZATION**: Maintain strict synchronization between `res/values/strings.xml` (`app_name`), `metadata.json` (`name`), and `settings.gradle.kts` (`rootProject.name`).
+15. **PLATFORM SYNCHRONIZATION**: Maintain strict synchronization between `res/values/strings.xml` (`app_name` = "NEO GLASS X"), `metadata.json` (`name` = "NEO GLASS X"), and `settings.gradle.kts` (`rootProject.name` = "NEO GLASS X").

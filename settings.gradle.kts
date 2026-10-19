@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "NeonWave"
+rootProject.name = "NEO GLASS X"
 
 include(":app")

@@ -4,7 +4,7 @@ data class Track(
   val id: String,
   val title: String,
   val artist: String,
-  val album: String = "NeonWave",
+  val album: String = "NEO GLASS X",
   val durationMs: Long = 0L,
   val streamUrl: String,
   val localPath: String? = null,

@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -34,7 +32,6 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,13 +67,11 @@ import com.example.data.model.Track
 import com.example.ui.theme.AtmosphereDeep
 import com.example.ui.theme.CoralAccent
 import com.example.ui.theme.CyanHighlight
-import com.example.ui.theme.GlassBorderCyan
 import com.example.ui.theme.GlassBorderLight
 import com.example.ui.theme.GlassBorderSubtle
 import com.example.ui.theme.GlassCard
 import com.example.ui.theme.GlassSurfaceDark
 import com.example.ui.theme.GlassSurfaceMedium
-import com.example.ui.theme.IndigoAura
 import com.example.ui.theme.LavenderGlass
 import com.example.ui.theme.RoyalBlue
 import com.example.ui.theme.TextMuted
@@ -97,7 +92,6 @@ fun DownloaderScreen(
   val context = LocalContext.current
   val keyboardController = LocalSoftwareKeyboardController.current
   var urlInput by remember { mutableStateOf("") }
-  var selectedFormatIndex by remember { mutableStateOf(0) }
 
   Box(
     modifier = modifier
@@ -111,7 +105,7 @@ fun DownloaderScreen(
       contentPadding = PaddingValues(top = 20.dp, bottom = 100.dp),
       verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-      // Header
+      // Header: NEO GLASS X MP3 Downloader
       item {
         Column {
           Row(verticalAlignment = Alignment.CenterVertically) {
@@ -123,7 +117,7 @@ fun DownloaderScreen(
             )
             Spacer(modifier = Modifier.width(10.dp))
             Text(
-              text = "Online Downloader",
+              text = "MP3 Downloader",
               color = TextPrimary,
               fontSize = 24.sp,
               fontWeight = FontWeight.Bold
@@ -131,7 +125,7 @@ fun DownloaderScreen(
           }
           Spacer(modifier = Modifier.height(4.dp))
           Text(
-            text = "Paste any media link to analyze and extract high-speed audio or video directly to your library.",
+            text = "Paste any direct MP3 audio link to analyze and download high-quality audio directly to your NEO GLASS X library.",
             color = TextSecondary,
             fontSize = 13.sp,
             lineHeight = 18.sp
@@ -152,7 +146,7 @@ fun DownloaderScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp)
           ) {
             Text(
-              text = "Media URL",
+              text = "Direct Audio Link (MP3)",
               color = TextPrimary,
               fontSize = 14.sp,
               fontWeight = FontWeight.SemiBold
@@ -164,7 +158,7 @@ fun DownloaderScreen(
               onValueChange = { urlInput = it },
               placeholder = {
                 Text(
-                  text = "https://example.com/audio.mp3...",
+                  text = "https://example.com/audio.mp3",
                   color = TextMuted,
                   fontSize = 13.sp
                 )
@@ -288,11 +282,9 @@ fun DownloaderScreen(
           item {
             MediaExtractedCard(
               info = downloadState.info,
-              selectedFormatIndex = selectedFormatIndex,
-              onSelectFormat = { selectedFormatIndex = it },
               onDownload = {
-                val format = downloadState.info.availableFormats.getOrNull(selectedFormatIndex)
-                  ?: downloadState.info.availableFormats.first()
+                val format = downloadState.info.availableFormats.firstOrNull()
+                  ?: MediaFormatOption("MP3 Audio", "mp3", isVideo = false, "Direct Stream", "Unknown size")
                 onStartDownload(downloadState.info, format)
               }
             )
@@ -332,12 +324,9 @@ fun DownloaderScreen(
   }
 }
 
-
 @Composable
 private fun MediaExtractedCard(
   info: ExtractedMediaInfo,
-  selectedFormatIndex: Int,
-  onSelectFormat: (Int) -> Unit,
   onDownload: () -> Unit
 ) {
   GlassCard(
@@ -351,7 +340,7 @@ private fun MediaExtractedCard(
       verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
       Text(
-        text = "Media Resolved",
+        text = "Audio Stream Resolved",
         color = CyanHighlight,
         fontSize = 13.sp,
         fontWeight = FontWeight.Bold
@@ -361,15 +350,30 @@ private fun MediaExtractedCard(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
       ) {
-        AsyncImage(
-          model = info.artworkUrl,
-          contentDescription = info.title,
-          contentScale = ContentScale.Crop,
+        Box(
           modifier = Modifier
             .size(64.dp)
             .clip(RoundedCornerShape(16.dp))
-            .border(1.dp, GlassBorderLight, RoundedCornerShape(16.dp))
-        )
+            .background(RoyalBlue.copy(alpha = 0.5f))
+            .border(1.dp, GlassBorderLight, RoundedCornerShape(16.dp)),
+          contentAlignment = Alignment.Center
+        ) {
+          if (info.artworkUrl.isNotBlank()) {
+            AsyncImage(
+              model = info.artworkUrl,
+              contentDescription = info.title,
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.fillMaxSize()
+            )
+          } else {
+            Icon(
+              imageVector = Icons.Filled.MusicNote,
+              contentDescription = null,
+              tint = CyanHighlight,
+              modifier = Modifier.size(32.dp)
+            )
+          }
+        }
 
         Spacer(modifier = Modifier.width(14.dp))
 
@@ -383,7 +387,7 @@ private fun MediaExtractedCard(
             overflow = TextOverflow.Ellipsis
           )
           Text(
-            text = "${info.artist} • ${(info.durationMs / 60000)}m",
+            text = "${info.artist} • Direct MP3",
             color = TextSecondary,
             fontSize = 12.sp
           )
@@ -391,55 +395,56 @@ private fun MediaExtractedCard(
       }
 
       Text(
-        text = "Select Extraction Format:",
+        text = "Target Audio Format:",
         color = TextPrimary,
         fontSize = 13.sp,
         fontWeight = FontWeight.SemiBold
       )
 
-      // Formats grid
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        info.availableFormats.forEachIndexed { idx, format ->
-          val isSelected = idx == selectedFormatIndex
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .clip(RoundedCornerShape(14.dp))
-              .background(if (isSelected) RoyalBlue.copy(alpha = 0.5f) else GlassSurfaceDark)
-              .border(
-                1.dp,
-                if (isSelected) CyanHighlight else GlassBorderSubtle,
-                RoundedCornerShape(14.dp)
-              )
-              .clickable { onSelectFormat(idx) }
-              .padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              Icon(
-                imageVector = if (format.isVideo) Icons.Filled.Videocam else Icons.Filled.MusicNote,
-                contentDescription = null,
-                tint = if (isSelected) CyanHighlight else LavenderGlass,
-                modifier = Modifier.size(18.dp)
-              )
-              Text(
-                text = "${format.label} • ${format.quality}",
-                color = TextPrimary,
-                fontSize = 13.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-              )
-            }
+      // Dedicated MP3 format card
+      val format = info.availableFormats.firstOrNull()
+        ?: MediaFormatOption("MP3 Audio", "mp3", isVideo = false, "Direct Stream", "Unknown size")
+
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .clip(RoundedCornerShape(14.dp))
+          .background(RoyalBlue.copy(alpha = 0.5f))
+          .border(1.dp, CyanHighlight, RoundedCornerShape(14.dp))
+          .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Filled.MusicNote,
+            contentDescription = null,
+            tint = CyanHighlight,
+            modifier = Modifier.size(20.dp)
+          )
+          Column {
             Text(
-              text = format.sizeDisplay,
-              color = TextSecondary,
-              fontSize = 12.sp
+              text = format.label,
+              color = TextPrimary,
+              fontSize = 14.sp,
+              fontWeight = FontWeight.Bold
+            )
+            Text(
+              text = format.quality,
+              color = LavenderGlass,
+              fontSize = 11.sp
             )
           }
         }
+        Text(
+          text = format.sizeDisplay,
+          color = TextSecondary,
+          fontSize = 12.sp,
+          fontWeight = FontWeight.Medium
+        )
       }
 
       // Download Button
@@ -472,7 +477,7 @@ private fun MediaExtractedCard(
             modifier = Modifier.size(20.dp)
           )
           Text(
-            text = "Download to Library",
+            text = "Download MP3 to Library",
             color = AtmosphereDeep,
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold
@@ -501,17 +506,19 @@ private fun DownloadProgressCard(state: DownloadState.Downloading) {
         verticalAlignment = Alignment.CenterVertically
       ) {
         Text(
-          text = "Downloading...",
+          text = "Downloading MP3...",
           color = CyanHighlight,
           fontSize = 14.sp,
           fontWeight = FontWeight.Bold
         )
-        Text(
-          text = "${(state.progress * 100).toInt()}%",
-          color = TextPrimary,
-          fontSize = 14.sp,
-          fontWeight = FontWeight.Bold
-        )
+        if (state.progress >= 0f) {
+          Text(
+            text = "${(state.progress * 100).toInt()}%",
+            color = TextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold
+          )
+        }
       }
 
       Text(
@@ -523,29 +530,48 @@ private fun DownloadProgressCard(state: DownloadState.Downloading) {
         overflow = TextOverflow.Ellipsis
       )
 
-      LinearProgressIndicator(
-        progress = { state.progress },
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(8.dp)
-          .clip(CircleShape),
-        color = CyanHighlight,
-        trackColor = GlassSurfaceMedium
-      )
+      if (state.progress >= 0f) {
+        LinearProgressIndicator(
+          progress = { state.progress },
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .clip(CircleShape),
+          color = CyanHighlight,
+          trackColor = GlassSurfaceMedium
+        )
+      } else {
+        LinearProgressIndicator(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .clip(CircleShape),
+          color = CyanHighlight,
+          trackColor = GlassSurfaceMedium
+        )
+      }
 
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
       ) {
         val downloadedMB = state.downloadedBytes / (1024.0 * 1024.0)
-        val totalMB = state.totalBytes / (1024.0 * 1024.0)
+        if (state.totalBytes > 0) {
+          val totalMB = state.totalBytes / (1024.0 * 1024.0)
+          Text(
+            text = "%.2f MB / %.2f MB".format(downloadedMB, totalMB),
+            color = TextSecondary,
+            fontSize = 12.sp
+          )
+        } else {
+          Text(
+            text = "%.2f MB downloaded".format(downloadedMB),
+            color = TextSecondary,
+            fontSize = 12.sp
+          )
+        }
         Text(
-          text = "%.1f MB / %.1f MB".format(downloadedMB, totalMB),
-          color = TextSecondary,
-          fontSize = 12.sp
-        )
-        Text(
-          text = "Speed: %.1f MB/s".format(state.speedMBs),
+          text = "Speed: %.2f MB/s".format(state.speedMBs),
           color = LavenderGlass,
           fontSize = 12.sp
         )
@@ -579,14 +605,14 @@ private fun DownloadCompletedCard(
       )
 
       Text(
-        text = "Download Complete!",
+        text = "MP3 Download Complete!",
         color = TextPrimary,
         fontSize = 18.sp,
         fontWeight = FontWeight.Bold
       )
 
       Text(
-        text = "\"${track.title}\" has been saved and indexed in your NeonWave offline Library.",
+        text = "\"${track.title}\" has been validated, saved, and added to your NEO GLASS X Library.",
         color = TextSecondary,
         fontSize = 13.sp,
         lineHeight = 18.sp

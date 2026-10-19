@@ -1,10 +1,10 @@
-# NEONWAVE — Aurora Glass Design System Specification
+# NEO GLASS X — Aurora Glass Design System Specification
 
 ## 1. Visual Source of Truth & Brand Identity
-The visual identity of NEONWAVE is directly derived from the **Aurora Glass** design language exhibited in the reference visual specification (`Screenshot_20261018-235942.ChatGPT.png`). It balances deep midnight depth, radiant cyan and violet ambient light cones, frosted translucent glass panels, and crisp typography.
+The visual identity of NEO GLASS X is directly derived from the **Aurora Glass** design language exhibited in the reference visual specification (`Screenshot_20261018-235942.ChatGPT.png`). It balances deep midnight depth, radiant cyan and violet ambient light cones, frosted translucent glass panels, and crisp typography.
 
 **Core Brand Identity**:
-- **Application Name**: NEONWAVE
+- **Application Name**: NEO GLASS X
 - **Aesthetic**: Aurora Glass (Deep Oceanic Navy + Radial Violet/Cyan Lighting + Translucent Frosted Glass + Neumorphic Glow)
 - **Design Philosophy**: No flat black screens, no generic dashboard boxes, and no harsh neon borders. Every element feels suspended in an illuminated audio atmosphere.
 
@@ -77,7 +77,7 @@ Modifier
 ### 4.1 Home Screen Layout
 1. **Header**:
    - Left: Rounded square glass icon button (Menu / Grid).
-   - Center: "NEONWAVE" with gradient soundwave icon and subtext "Feel the music, live the moment."
+   - Center: "NEO GLASS X" with gradient soundwave icon and subtext "Feel the music, live the moment."
    - Right: Notification bell with badge dot, accompanied by circular user avatar badge.
 2. **Hero Featured Banner**:
    - Rounded glass card (height ~180dp).

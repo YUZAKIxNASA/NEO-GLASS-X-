@@ -2,8 +2,11 @@ package com.example.player
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import com.example.data.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +18,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileNotFoundException
 
 enum class RepeatMode {
   OFF, ALL, ONE
@@ -35,10 +41,13 @@ data class PlayerState(
   val errorMessage: String? = null
 )
 
-class PlaybackManager(private val context: Context) {
+class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusChangeListener {
   private val scope = CoroutineScope(Dispatchers.Main + Job())
   private var mediaPlayer: MediaPlayer? = null
   private var tickerJob: Job? = null
+
+  private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+  private var focusRequest: AudioFocusRequest? = null
 
   private val _state = MutableStateFlow(PlayerState())
   val state: StateFlow<PlayerState> = _state.asStateFlow()
@@ -51,15 +60,20 @@ class PlaybackManager(private val context: Context) {
           .setUsage(AudioAttributes.USAGE_MEDIA)
           .build()
       )
+      setVolume(1.0f, 1.0f)
       setOnPreparedListener { mp ->
+        val actualDuration = mp.duration.toLong()
         _state.value = _state.value.copy(
           isBuffering = false,
           isPlaying = true,
-          durationMs = mp.duration.toLong().coerceAtLeast(1000L),
-          audioSessionId = mp.audioSessionId
+          durationMs = if (actualDuration > 0) actualDuration else _state.value.currentTrack?.durationMs ?: 180000L,
+          audioSessionId = mp.audioSessionId,
+          errorMessage = null
         )
-        mp.start()
-        startTicker()
+        if (requestAudioFocus()) {
+          mp.start()
+          startTicker()
+        }
       }
       setOnCompletionListener {
         handleTrackCompletion()
@@ -68,7 +82,7 @@ class PlaybackManager(private val context: Context) {
         _state.value = _state.value.copy(
           isPlaying = false,
           isBuffering = false,
-          errorMessage = "Playback error ($what, $extra). Please check your internet connection."
+          errorMessage = "Playback error occurred (code $what, extra $extra). Please check the audio file."
         )
         stopTicker()
         true
@@ -96,20 +110,33 @@ class PlaybackManager(private val context: Context) {
         try {
           val player = getOrCreatePlayer()
           player.reset()
+          player.setVolume(1.0f, 1.0f)
 
-          val uri = if (track.localPath != null) {
-            Uri.parse(track.localPath)
+          // Handle local file vs remote URL safely
+          val localFilePath = track.localPath ?: if (track.streamUrl.startsWith("file:")) {
+            Uri.parse(track.streamUrl).path
+          } else null
+
+          if (localFilePath != null) {
+            val file = File(localFilePath)
+            if (!file.exists() || file.length() == 0L) {
+              throw FileNotFoundException("Local file not found at: ${file.name}")
+            }
+            // Using file descriptor is the most reliable way to play local files in Android MediaPlayer
+            FileInputStream(file).use { fis ->
+              player.setDataSource(fis.fd)
+            }
           } else {
-            Uri.parse(track.streamUrl)
+            // Remote HTTP/HTTPS audio stream
+            player.setDataSource(context, Uri.parse(track.streamUrl))
           }
 
-          player.setDataSource(context, uri)
           player.prepareAsync()
         } catch (e: Exception) {
           _state.value = _state.value.copy(
             isBuffering = false,
             isPlaying = false,
-            errorMessage = "Failed to load audio: ${e.localizedMessage ?: "Unknown error"}"
+            errorMessage = "Failed to load audio: ${e.localizedMessage ?: "File error"}"
           )
         }
       }
@@ -124,9 +151,11 @@ class PlaybackManager(private val context: Context) {
       stopTicker()
     } else {
       if (_state.value.currentTrack != null) {
-        player.start()
-        _state.value = _state.value.copy(isPlaying = true)
-        startTicker()
+        if (requestAudioFocus()) {
+          player.start()
+          _state.value = _state.value.copy(isPlaying = true)
+          startTicker()
+        }
       }
     }
   }
@@ -143,7 +172,8 @@ class PlaybackManager(private val context: Context) {
     if (currentQ.isEmpty()) return
 
     val nextIdx = if (_state.value.isShuffle) {
-      (currentQ.indices).filter { it != _state.value.currentIndex }.randomOrNull() ?: 0
+      val candidates = currentQ.indices.filter { it != _state.value.currentIndex }
+      candidates.randomOrNull() ?: 0
     } else {
       (_state.value.currentIndex + 1) % currentQ.size
     }
@@ -155,7 +185,7 @@ class PlaybackManager(private val context: Context) {
     val currentQ = _state.value.queue
     if (currentQ.isEmpty()) return
 
-    // If more than 3 seconds in, seek to beginning
+    // If more than 3 seconds in, restart track
     if (_state.value.currentPositionMs > 3000L) {
       seekTo(0L)
       return
@@ -248,8 +278,55 @@ class PlaybackManager(private val context: Context) {
     tickerJob = null
   }
 
+  private fun requestAudioFocus(): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(
+          AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+            .build()
+        )
+        .setOnAudioFocusChangeListener(this)
+        .build()
+      focusRequest = request
+      audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    } else {
+      @Suppress("DEPRECATION")
+      audioManager.requestAudioFocus(this, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+  }
+
+  private fun abandonAudioFocus() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+    } else {
+      @Suppress("DEPRECATION")
+      audioManager.abandonAudioFocus(this)
+    }
+  }
+
+  override fun onAudioFocusChange(focusChange: Int) {
+    when (focusChange) {
+      AudioManager.AUDIOFOCUS_LOSS -> {
+        mediaPlayer?.pause()
+        _state.value = _state.value.copy(isPlaying = false)
+        stopTicker()
+      }
+      AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+        mediaPlayer?.pause()
+        _state.value = _state.value.copy(isPlaying = false)
+        stopTicker()
+      }
+      AudioManager.AUDIOFOCUS_GAIN -> {
+        mediaPlayer?.setVolume(1.0f, 1.0f)
+      }
+    }
+  }
+
   fun release() {
     stopTicker()
+    abandonAudioFocus()
     mediaPlayer?.release()
     mediaPlayer = null
   }

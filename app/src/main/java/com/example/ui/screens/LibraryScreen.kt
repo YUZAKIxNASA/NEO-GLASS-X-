@@ -462,7 +462,7 @@ private fun EmptyLibraryCard(
       )
       Text(
         text = if (hasSearch) "Try searching for a different track title or artist."
-        else "Your offline library is clean and ready. Extract and download any audio or video in the Downloader tab.",
+        else "Your offline library is clean and ready. Download direct MP3 audio files in the Downloader tab.",
         color = TextSecondary,
         fontSize = 13.sp,
         textAlign = androidx.compose.ui.text.style.TextAlign.Center,

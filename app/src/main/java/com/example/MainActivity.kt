@@ -24,13 +24,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.components.MiniPlayerBar
-import com.example.ui.components.NeonWaveBottomBar
+import com.example.ui.components.NeoGlassBottomBar
 import com.example.ui.screens.DownloaderScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LibraryScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.theme.AtmosphereDeep
-import com.example.ui.theme.NeonWaveTheme
+import com.example.ui.theme.NeoGlassXTheme
 import com.example.ui.viewmodel.AppTab
 import com.example.ui.viewmodel.MainViewModel
 
@@ -42,15 +42,15 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
 
     setContent {
-      NeonWaveTheme {
-        NeonWaveApp(viewModel = viewModel)
+      NeoGlassXTheme {
+        NeoGlassXApp(viewModel = viewModel)
       }
     }
   }
 }
 
 @Composable
-fun NeonWaveApp(viewModel: MainViewModel) {
+fun NeoGlassXApp(viewModel: MainViewModel) {
   val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
   val isPlayerExpanded by viewModel.isPlayerExpanded.collectAsStateWithLifecycle()
   val playerState by viewModel.playerState.collectAsStateWithLifecycle()
@@ -116,7 +116,7 @@ fun NeonWaveApp(viewModel: MainViewModel) {
             }
 
             // Floating Navigation Bar
-            NeonWaveBottomBar(
+            NeoGlassBottomBar(
               currentTab = activeTab,
               onTabSelected = { viewModel.selectTab(it) }
             )

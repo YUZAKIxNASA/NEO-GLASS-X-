@@ -32,7 +32,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Share
@@ -470,7 +470,7 @@ fun PlayerScreen(
 
         IconButton(onClick = { isQueueSheetVisible = true }) {
           Icon(
-            imageVector = Icons.Filled.QueueMusic,
+            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
             contentDescription = "Queue",
             tint = CyanHighlight,
             modifier = Modifier.size(22.dp)

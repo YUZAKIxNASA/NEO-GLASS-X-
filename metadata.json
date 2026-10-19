@@ -1,6 +1,6 @@
 {
-  "name": "NeonWave",
-  "description": "Aurora Glass music player and media downloader with real-time playback, audio queue, and library manager.",
+  "name": "NEO GLASS X",
+  "description": "NEO GLASS X: High-fidelity Aurora Glass music player and MP3 downloader with real-time playback, audio queue, and offline library manager.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -207,7 +207,7 @@ private fun HomeHeader(onOpenSearch: () -> Unit) {
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-          text = "NeonWave",
+          text = "NEO GLASS X",
           color = TextPrimary,
           fontSize = 20.sp,
           fontWeight = FontWeight.Bold,
@@ -270,7 +270,7 @@ private fun FeaturedHeroCard(
         verticalArrangement = Arrangement.Center
       ) {
         Text(
-          text = if (featuredTrack != null) "Now Playing\nSelection" else "Welcome to\nNeonWave",
+          text = if (featuredTrack != null) "Now Playing\nSelection" else "Welcome to\nNEO GLASS X",
           color = TextPrimary,
           fontSize = 22.sp,
           lineHeight = 26.sp,
@@ -281,7 +281,7 @@ private fun FeaturedHeroCard(
 
         Text(
           text = featuredTrack?.let { "${it.title} • ${it.artist}" }
-            ?: "Your high-speed media downloader & offline audio player.",
+            ?: "Your high-speed MP3 downloader & offline audio player.",
           color = TextSecondary,
           fontSize = 12.sp,
           maxLines = 2,
@@ -716,7 +716,7 @@ private fun EmptyHomeStateCard(onGoToDownloader: () -> Unit) {
       )
 
       Text(
-        text = "Paste any media link in the Online Downloader to extract audio or video files directly to your NeonWave library.",
+        text = "Paste any direct MP3 audio link in the Downloader to save audio files directly to your NEO GLASS X library.",
         color = TextSecondary,
         fontSize = 13.sp,
         textAlign = TextAlign.Center,

@@ -51,7 +51,7 @@ import com.example.ui.theme.VioletGaze
 import com.example.ui.viewmodel.AppTab
 
 @Composable
-fun NeonWaveBottomBar(
+fun NeoGlassBottomBar(
   currentTab: AppTab,
   onTabSelected: (AppTab) -> Unit,
   modifier: Modifier = Modifier
@@ -208,4 +208,13 @@ private fun NavItem(
       }
     }
   }
+}
+
+@Composable
+fun NeonWaveBottomBar(
+  currentTab: AppTab,
+  onTabSelected: (AppTab) -> Unit,
+  modifier: Modifier = Modifier
+) {
+  NeoGlassBottomBar(currentTab = currentTab, onTabSelected = onTabSelected, modifier = modifier)
 }
