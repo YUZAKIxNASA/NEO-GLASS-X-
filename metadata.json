@@ -1,0 +1,6 @@
+{
+  "name": "NeonWave",
+  "description": "Aurora Glass music player and media downloader with real-time playback, audio queue, and library manager.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
