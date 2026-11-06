@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.player.PlayerState
+import com.example.ui.theme.CoralAccent
 import com.example.ui.theme.CyanHighlight
 import com.example.ui.theme.GlassBorderLight
 import com.example.ui.theme.GlassSurfaceDark
@@ -138,19 +139,29 @@ fun MiniPlayerBar(
           )
           Spacer(modifier = Modifier.height(2.dp))
           Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-              text = track.artist,
-              color = TextSecondary,
-              fontSize = 12.sp,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-            if (track.format.isNotBlank()) {
+            if (playerState.errorMessage != null) {
               Text(
-                text = " • ${track.format}",
-                color = TextMuted,
-                fontSize = 10.sp
+                text = playerState.errorMessage,
+                color = CoralAccent,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
               )
+            } else {
+              Text(
+                text = track.artist,
+                color = TextSecondary,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+              if (track.format.isNotBlank()) {
+                Text(
+                  text = " • ${track.format}",
+                  color = TextMuted,
+                  fontSize = 10.sp
+                )
+              }
             }
           }
         }

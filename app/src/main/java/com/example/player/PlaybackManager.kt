@@ -1,6 +1,9 @@
 package com.example.player
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -11,6 +14,7 @@ import com.example.data.model.Track
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,8 +23,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileNotFoundException
 
 enum class RepeatMode {
   OFF, ALL, ONE
@@ -44,16 +46,47 @@ data class PlayerState(
 class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusChangeListener {
   private val scope = CoroutineScope(Dispatchers.Main + Job())
   private var mediaPlayer: MediaPlayer? = null
+  private var isPrepared = false
   private var tickerJob: Job? = null
 
   private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
   private var focusRequest: AudioFocusRequest? = null
+  private var isNoisyReceiverRegistered = false
 
   private val _state = MutableStateFlow(PlayerState())
   val state: StateFlow<PlayerState> = _state.asStateFlow()
 
+  private val becomingNoisyReceiver = object : BroadcastReceiver() {
+    override fun onReceive(c: Context?, intent: Intent?) {
+      if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY) {
+        pause()
+      }
+    }
+  }
+
+  private fun registerNoisyReceiver() {
+    if (!isNoisyReceiverRegistered) {
+      try {
+        val filter = IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+        context.registerReceiver(becomingNoisyReceiver, filter)
+        isNoisyReceiverRegistered = true
+      } catch (_: Exception) {}
+    }
+  }
+
+  private fun unregisterNoisyReceiver() {
+    if (isNoisyReceiverRegistered) {
+      try {
+        context.unregisterReceiver(becomingNoisyReceiver)
+      } catch (_: Exception) {}
+      isNoisyReceiverRegistered = false
+    }
+  }
+
   private fun getOrCreatePlayer(): MediaPlayer {
-    return mediaPlayer ?: MediaPlayer().apply {
+    mediaPlayer?.let { return it }
+
+    val player = MediaPlayer().apply {
       setAudioAttributes(
         AudioAttributes.Builder()
           .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -62,6 +95,7 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
       )
       setVolume(1.0f, 1.0f)
       setOnPreparedListener { mp ->
+        isPrepared = true
         val actualDuration = mp.duration.toLong()
         _state.value = _state.value.copy(
           isBuffering = false,
@@ -71,100 +105,192 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
           errorMessage = null
         )
         if (requestAudioFocus()) {
-          mp.start()
-          startTicker()
+          try {
+            mp.start()
+            registerNoisyReceiver()
+            startTicker()
+          } catch (e: Exception) {
+            handlePlaybackError("Failed to start audio playback: ${e.localizedMessage ?: "Unknown error"}")
+          }
         }
       }
       setOnCompletionListener {
         handleTrackCompletion()
       }
       setOnErrorListener { _, what, extra ->
-        _state.value = _state.value.copy(
-          isPlaying = false,
-          isBuffering = false,
-          errorMessage = "Playback error occurred (code $what, extra $extra). Please check the audio file."
-        )
-        stopTicker()
+        isPrepared = false
+        val message = when (what) {
+          MediaPlayer.MEDIA_ERROR_SERVER_DIED -> "Audio media server died. Please retry."
+          MediaPlayer.MEDIA_ERROR_NOT_VALID_FOR_PROGRESSIVE_PLAYBACK -> "Audio stream not valid for progressive playback."
+          else -> "Audio playback error ($what, $extra). Please check the audio file."
+        }
+        handlePlaybackError(message)
         true
       }
-      mediaPlayer = this
     }
+    mediaPlayer = player
+    return player
+  }
+
+  private sealed class SourceValidation {
+    data class LocalFile(val file: File) : SourceValidation()
+    data class RemoteUri(val uri: Uri) : SourceValidation()
+    data class Error(val message: String) : SourceValidation()
+  }
+
+  private fun validateAudioSource(track: Track): SourceValidation {
+    // 1. Resolve local path
+    val localFilePath = track.localPath ?: if (track.streamUrl.startsWith("file:")) {
+      Uri.parse(track.streamUrl).path
+    } else null
+
+    if (localFilePath != null) {
+      val file = File(localFilePath)
+      if (!file.exists()) {
+        return SourceValidation.Error("Local audio file not found: ${file.name}")
+      }
+      if (file.length() == 0L) {
+        return SourceValidation.Error("Audio file is empty (0 bytes).")
+      }
+      if (!file.canRead()) {
+        return SourceValidation.Error("Permission denied reading audio file: ${file.name}")
+      }
+      return SourceValidation.LocalFile(file)
+    }
+
+    // 2. Resolve remote URI
+    val uri = try {
+      Uri.parse(track.streamUrl)
+    } catch (_: Exception) {
+      return SourceValidation.Error("Invalid audio stream URL: ${track.streamUrl}")
+    }
+
+    val scheme = uri.scheme?.lowercase()
+    if (scheme != "http" && scheme != "https") {
+      return SourceValidation.Error("Unsupported stream scheme: '$scheme'. Only HTTP and HTTPS are supported.")
+    }
+
+    return SourceValidation.RemoteUri(uri)
   }
 
   fun playTrack(track: Track, newQueue: List<Track>? = null) {
+    // 1. Build and synchronize queue immediately on caller thread
+    val currentQueue = newQueue ?: _state.value.queue
+    val updatedQueue = if (currentQueue.isEmpty()) {
+      listOf(track)
+    } else if (!currentQueue.any { it.id == track.id }) {
+      listOf(track) + currentQueue
+    } else {
+      currentQueue
+    }
+    val index = updatedQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+
+    _state.value = _state.value.copy(
+      currentTrack = track,
+      queue = updatedQueue,
+      currentIndex = index,
+      isBuffering = true,
+      errorMessage = null,
+      currentPositionMs = 0L,
+      durationMs = track.durationMs
+    )
+
     scope.launch {
-      val updatedQueue = newQueue ?: _state.value.queue.ifEmpty { listOf(track) }
-      val index = updatedQueue.indexOfFirst { it.id == track.id }.let { if (it >= 0) it else 0 }
 
-      _state.value = _state.value.copy(
-        currentTrack = track,
-        queue = updatedQueue,
-        currentIndex = index,
-        isBuffering = true,
-        errorMessage = null,
-        currentPositionMs = 0L,
-        durationMs = track.durationMs
-      )
+      // 2. Validate audio source on IO dispatcher
+      val source = withContext(Dispatchers.IO) {
+        validateAudioSource(track)
+      }
 
-      withContext(Dispatchers.IO) {
-        try {
-          val player = getOrCreatePlayer()
-          player.reset()
-          player.setVolume(1.0f, 1.0f)
+      if (source is SourceValidation.Error) {
+        handlePlaybackError(source.message)
+        return@launch
+      }
 
-          // Handle local file vs remote URL safely
-          val localFilePath = track.localPath ?: if (track.streamUrl.startsWith("file:")) {
-            Uri.parse(track.streamUrl).path
-          } else null
+      // 3. Configure and prepare MediaPlayer safely on Main thread
+      try {
+        val player = getOrCreatePlayer()
+        isPrepared = false
+        player.reset()
+        player.setVolume(1.0f, 1.0f)
 
-          if (localFilePath != null) {
-            val file = File(localFilePath)
-            if (!file.exists() || file.length() == 0L) {
-              throw FileNotFoundException("Local file not found at: ${file.name}")
-            }
-            // Using file descriptor is the most reliable way to play local files in Android MediaPlayer
-            FileInputStream(file).use { fis ->
-              player.setDataSource(fis.fd)
-            }
-          } else {
-            // Remote HTTP/HTTPS audio stream
-            player.setDataSource(context, Uri.parse(track.streamUrl))
+        when (source) {
+          is SourceValidation.LocalFile -> {
+            // Local file path directly managed by MediaPlayer's native engine
+            player.setDataSource(source.file.absolutePath)
           }
-
-          player.prepareAsync()
-        } catch (e: Exception) {
-          _state.value = _state.value.copy(
-            isBuffering = false,
-            isPlaying = false,
-            errorMessage = "Failed to load audio: ${e.localizedMessage ?: "File error"}"
-          )
+          is SourceValidation.RemoteUri -> {
+            player.setDataSource(context, source.uri)
+          }
+          else -> {}
         }
+
+        player.prepareAsync()
+      } catch (e: Exception) {
+        handlePlaybackError("Failed to initialize audio source: ${e.localizedMessage ?: "Unknown file error"}")
       }
     }
   }
 
   fun togglePlayPause() {
+    val player = mediaPlayer
+    if (player == null || !isPrepared) {
+      val track = _state.value.currentTrack
+      if (track != null) {
+        playTrack(track)
+      }
+      return
+    }
+
+    if (_state.value.isPlaying) {
+      pause()
+    } else {
+      resume()
+    }
+  }
+
+  fun pause() {
     val player = mediaPlayer ?: return
     if (_state.value.isPlaying) {
-      player.pause()
-      _state.value = _state.value.copy(isPlaying = false)
-      stopTicker()
-    } else {
-      if (_state.value.currentTrack != null) {
-        if (requestAudioFocus()) {
-          player.start()
-          _state.value = _state.value.copy(isPlaying = true)
-          startTicker()
-        }
+      try {
+        player.pause()
+        unregisterNoisyReceiver()
+        _state.value = _state.value.copy(isPlaying = false)
+        stopTicker()
+      } catch (e: Exception) {
+        handlePlaybackError("Pause error: ${e.localizedMessage}")
+      }
+    }
+  }
+
+  fun resume() {
+    val player = mediaPlayer ?: return
+    if (!isPrepared) {
+      val track = _state.value.currentTrack
+      if (track != null) playTrack(track)
+      return
+    }
+
+    if (requestAudioFocus()) {
+      try {
+        player.start()
+        registerNoisyReceiver()
+        _state.value = _state.value.copy(isPlaying = true, errorMessage = null)
+        startTicker()
+      } catch (e: Exception) {
+        handlePlaybackError("Resume error: ${e.localizedMessage}")
       }
     }
   }
 
   fun seekTo(positionMs: Long) {
-    val player = mediaPlayer ?: return
-    val clamped = positionMs.coerceIn(0L, _state.value.durationMs)
-    player.seekTo(clamped.toInt())
+    val clamped = positionMs.coerceIn(0L, _state.value.durationMs.coerceAtLeast(1000L))
     _state.value = _state.value.copy(currentPositionMs = clamped)
+    if (isPrepared) {
+      try {
+        mediaPlayer?.seekTo(clamped.toInt())
+      } catch (_: Exception) {}
+    }
   }
 
   fun next() {
@@ -185,7 +311,6 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
     val currentQ = _state.value.queue
     if (currentQ.isEmpty()) return
 
-    // If more than 3 seconds in, restart track
     if (_state.value.currentPositionMs > 3000L) {
       seekTo(0L)
       return
@@ -215,10 +340,12 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
 
   fun setPlaybackSpeed(speed: Float) {
     mediaPlayer?.let { mp ->
-      try {
-        mp.playbackParams = mp.playbackParams.setSpeed(speed)
-        _state.value = _state.value.copy(playbackSpeed = speed)
-      } catch (_: Exception) {}
+      if (isPrepared) {
+        try {
+          mp.playbackParams = mp.playbackParams.setSpeed(speed)
+          _state.value = _state.value.copy(playbackSpeed = speed)
+        } catch (_: Exception) {}
+      }
     }
   }
 
@@ -230,13 +357,36 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
     }
   }
 
+  fun clearError() {
+    _state.value = _state.value.copy(errorMessage = null)
+  }
+
+  private fun handlePlaybackError(message: String) {
+    stopTicker()
+    unregisterNoisyReceiver()
+    abandonAudioFocus()
+    _state.value = _state.value.copy(
+      isPlaying = false,
+      isBuffering = false,
+      errorMessage = message
+    )
+    try {
+      mediaPlayer?.reset()
+    } catch (_: Exception) {}
+    isPrepared = false
+  }
+
   private fun handleTrackCompletion() {
     when (_state.value.repeatMode) {
       RepeatMode.ONE -> {
         seekTo(0L)
-        mediaPlayer?.start()
-        _state.value = _state.value.copy(isPlaying = true)
-        startTicker()
+        mediaPlayer?.let { mp ->
+          try {
+            mp.start()
+            _state.value = _state.value.copy(isPlaying = true)
+            startTicker()
+          } catch (_: Exception) {}
+        }
       }
       RepeatMode.ALL -> {
         next()
@@ -247,6 +397,7 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
         } else {
           _state.value = _state.value.copy(isPlaying = false, currentPositionMs = 0L)
           stopTicker()
+          unregisterNoisyReceiver()
         }
       }
     }
@@ -258,7 +409,7 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
       while (isActive && _state.value.isPlaying) {
         mediaPlayer?.let { mp ->
           try {
-            if (mp.isPlaying) {
+            if (isPrepared && mp.isPlaying) {
               val pos = mp.currentPosition.toLong()
               val dur = mp.duration.toLong().coerceAtLeast(1000L)
               _state.value = _state.value.copy(
@@ -309,14 +460,10 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
   override fun onAudioFocusChange(focusChange: Int) {
     when (focusChange) {
       AudioManager.AUDIOFOCUS_LOSS -> {
-        mediaPlayer?.pause()
-        _state.value = _state.value.copy(isPlaying = false)
-        stopTicker()
+        pause()
       }
       AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-        mediaPlayer?.pause()
-        _state.value = _state.value.copy(isPlaying = false)
-        stopTicker()
+        pause()
       }
       AudioManager.AUDIOFOCUS_GAIN -> {
         mediaPlayer?.setVolume(1.0f, 1.0f)
@@ -326,8 +473,13 @@ class PlaybackManager(private val context: Context) : AudioManager.OnAudioFocusC
 
   fun release() {
     stopTicker()
+    unregisterNoisyReceiver()
     abandonAudioFocus()
-    mediaPlayer?.release()
+    try {
+      mediaPlayer?.release()
+    } catch (_: Exception) {}
     mediaPlayer = null
+    isPrepared = false
+    scope.cancel()
   }
 }

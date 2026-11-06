@@ -138,14 +138,21 @@ fun NeoGlassXApp(viewModel: MainViewModel) {
               AppTab.HOME -> {
                 HomeScreen(
                   tracks = allTracks,
-                  onPlayTrack = { viewModel.playTrack(it) },
+                  onPlayTrack = {
+                    viewModel.playTrack(it)
+                    viewModel.setPlayerExpanded(true)
+                  },
                   onToggleFavorite = { viewModel.toggleFavorite(it) },
                   onNavigateTab = { viewModel.selectTab(it) },
                   onExpandPlayer = {
-                    if (playerState.currentTrack == null && allTracks.isNotEmpty()) {
+                    if (playerState.currentTrack != null) {
+                      viewModel.setPlayerExpanded(true)
+                    } else if (allTracks.isNotEmpty()) {
                       viewModel.playTrack(allTracks.first())
+                      viewModel.setPlayerExpanded(true)
+                    } else {
+                      viewModel.selectTab(AppTab.DOWNLOADER)
                     }
-                    viewModel.setPlayerExpanded(true)
                   }
                 )
               }
@@ -159,7 +166,8 @@ fun NeoGlassXApp(viewModel: MainViewModel) {
                     viewModel.playTrack(it)
                     viewModel.setPlayerExpanded(true)
                   },
-                  onReset = { viewModel.resetDownloader() }
+                  onReset = { viewModel.resetDownloader() },
+                  onCancelDownload = { viewModel.cancelDownload() }
                 )
               }
 
@@ -172,7 +180,10 @@ fun NeoGlassXApp(viewModel: MainViewModel) {
                   searchQuery = searchQuery,
                   onSelectCategory = { viewModel.selectCategory(it) },
                   onSearchQueryChanged = { viewModel.setSearchQuery(it) },
-                  onPlayTrack = { viewModel.playTrack(it) },
+                  onPlayTrack = {
+                    viewModel.playTrack(it)
+                    viewModel.setPlayerExpanded(true)
+                  },
                   onToggleFavorite = { viewModel.toggleFavorite(it) },
                   onNavigateToDownloader = { viewModel.selectTab(AppTab.DOWNLOADER) }
                 )

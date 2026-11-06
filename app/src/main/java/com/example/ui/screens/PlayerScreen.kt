@@ -25,8 +25,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
@@ -295,6 +297,50 @@ fun PlayerScreen(
           fontSize = 15.sp,
           fontWeight = FontWeight.Normal
         )
+      }
+
+      // Playback Error Notice Card
+      if (playerState.errorMessage != null) {
+        GlassCard(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+          shape = RoundedCornerShape(16.dp)
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Filled.ErrorOutline,
+              contentDescription = "Playback Error",
+              tint = CoralAccent,
+              modifier = Modifier.size(24.dp)
+            )
+            Text(
+              text = playerState.errorMessage,
+              color = TextPrimary,
+              fontSize = 12.sp,
+              modifier = Modifier.weight(1f),
+              maxLines = 2,
+              overflow = TextOverflow.Ellipsis
+            )
+            IconButton(
+              onClick = onTogglePlayPause,
+              modifier = Modifier.size(32.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = "Retry Playback",
+                tint = CyanHighlight,
+                modifier = Modifier.size(20.dp)
+              )
+            }
+          }
+        }
       }
 
       // 4. Progress Scrubber with Timestamps

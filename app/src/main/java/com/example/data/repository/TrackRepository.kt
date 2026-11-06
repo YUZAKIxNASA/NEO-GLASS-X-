@@ -46,4 +46,49 @@ class TrackRepository(private val context: Context) {
       trackDao.deleteTrackById(id)
     }
   }
+
+  suspend fun syncOfflineFiles() = withContext(Dispatchers.IO) {
+    try {
+      val musicDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC) ?: context.filesDir
+      if (musicDir.exists()) {
+        val mp3Files = musicDir.listFiles { _, name -> name.endsWith(".mp3", ignoreCase = true) } ?: emptyArray()
+        for (file in mp3Files) {
+          if (file.length() > 64) {
+            val existing = trackDao.getTrackById(file.name)
+            if (existing == null) {
+              val title = file.nameWithoutExtension.replace(Regex("_\\d+$"), "").replace("_", " ")
+              val retriever = android.media.MediaMetadataRetriever()
+              var dur = 180000L
+              var artist = "Offline Artist"
+              try {
+                retriever.setDataSource(file.absolutePath)
+                dur = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 180000L
+                val extractedArtist = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                if (!extractedArtist.isNullOrBlank()) artist = extractedArtist
+                retriever.release()
+              } catch (_: Exception) {}
+
+              val track = Track(
+                id = file.name,
+                title = title,
+                artist = artist,
+                album = "NEO GLASS X Downloads",
+                durationMs = dur,
+                streamUrl = android.net.Uri.fromFile(file).toString(),
+                localPath = file.absolutePath,
+                artworkUrl = "",
+                isFavorite = false,
+                category = "Downloaded",
+                isDownloaded = true,
+                format = "MP3",
+                isVideo = false,
+                addedAt = file.lastModified()
+              )
+              insertTrack(track)
+            }
+          }
+        }
+      }
+    } catch (_: Exception) {}
+  }
 }

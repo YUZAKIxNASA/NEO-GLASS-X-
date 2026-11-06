@@ -26,12 +26,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.MusicOff
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.downloader.DownloadErrorType
 import com.example.data.downloader.DownloadState
 import com.example.data.downloader.ExtractedMediaInfo
 import com.example.data.downloader.MediaFormatOption
@@ -87,6 +95,7 @@ fun DownloaderScreen(
   onStartDownload: (ExtractedMediaInfo, MediaFormatOption) -> Unit,
   onPlayTrack: (Track) -> Unit,
   onReset: () -> Unit,
+  onCancelDownload: () -> Unit = {},
   modifier: Modifier = Modifier
 ) {
   val context = LocalContext.current
@@ -293,7 +302,10 @@ fun DownloaderScreen(
 
         is DownloadState.Downloading -> {
           item {
-            DownloadProgressCard(state = downloadState)
+            DownloadProgressCard(
+              state = downloadState,
+              onCancel = onCancelDownload
+            )
           }
         }
 
@@ -311,8 +323,14 @@ fun DownloaderScreen(
           item {
             DownloadErrorCard(
               message = downloadState.message,
+              title = downloadState.title,
+              errorType = downloadState.errorType,
               onRetry = {
                 if (urlInput.isNotBlank()) onAnalyzeUrl(urlInput) else onReset()
+              },
+              onReset = {
+                urlInput = ""
+                onReset()
               }
             )
           }
@@ -489,9 +507,14 @@ private fun MediaExtractedCard(
 }
 
 @Composable
-private fun DownloadProgressCard(state: DownloadState.Downloading) {
+private fun DownloadProgressCard(
+  state: DownloadState.Downloading,
+  onCancel: () -> Unit
+) {
   GlassCard(
-    modifier = Modifier.fillMaxWidth(),
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("download_progress_card"),
     shape = RoundedCornerShape(24.dp)
   ) {
     Column(
@@ -553,7 +576,8 @@ private fun DownloadProgressCard(state: DownloadState.Downloading) {
 
       Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
       ) {
         val downloadedMB = state.downloadedBytes / (1024.0 * 1024.0)
         if (state.totalBytes > 0) {
@@ -575,6 +599,37 @@ private fun DownloadProgressCard(state: DownloadState.Downloading) {
           color = LavenderGlass,
           fontSize = 12.sp
         )
+      }
+
+      // Cancel Download Button
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(38.dp)
+          .clip(RoundedCornerShape(12.dp))
+          .background(GlassSurfaceDark)
+          .border(1.dp, CoralAccent.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+          .clickable(onClick = onCancel)
+          .testTag("cancel_download_button"),
+        contentAlignment = Alignment.Center
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Icon(
+            imageVector = Icons.Filled.Close,
+            contentDescription = "Cancel Download",
+            tint = CoralAccent,
+            modifier = Modifier.size(16.dp)
+          )
+          Text(
+            text = "Cancel Download",
+            color = CoralAccent,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold
+          )
+        }
       }
     }
   }
@@ -680,55 +735,197 @@ private fun DownloadCompletedCard(
 @Composable
 private fun DownloadErrorCard(
   message: String,
-  onRetry: () -> Unit
+  title: String,
+  errorType: DownloadErrorType,
+  onRetry: () -> Unit,
+  onReset: () -> Unit
 ) {
+  val icon = when (errorType) {
+    DownloadErrorType.YOUTUBE_URL -> Icons.Filled.Warning
+    DownloadErrorType.UNSUPPORTED_WEBPAGE -> Icons.Filled.Language
+    DownloadErrorType.INVALID_URL -> Icons.Filled.LinkOff
+    DownloadErrorType.HTTP_ERROR -> Icons.Filled.CloudOff
+    DownloadErrorType.CORRUPT_AUDIO -> Icons.Filled.MusicOff
+    DownloadErrorType.NETWORK_ERROR -> Icons.Filled.WifiOff
+    else -> Icons.Filled.ErrorOutline
+  }
+
+  val badgeText = when (errorType) {
+    DownloadErrorType.YOUTUBE_URL -> "YOUTUBE NOT SUPPORTED"
+    DownloadErrorType.UNSUPPORTED_WEBPAGE -> "NON-AUDIO WEBPAGE"
+    DownloadErrorType.INVALID_URL -> "INVALID LINK"
+    DownloadErrorType.HTTP_ERROR -> "SERVER RESPONSE"
+    DownloadErrorType.CORRUPT_AUDIO -> "INVALID AUDIO DATA"
+    DownloadErrorType.NETWORK_ERROR -> "CONNECTION TIMEOUT"
+    else -> "DOWNLOAD NOTICE"
+  }
+
   GlassCard(
-    modifier = Modifier.fillMaxWidth(),
+    modifier = Modifier
+      .fillMaxWidth()
+      .testTag("download_error_card"),
     shape = RoundedCornerShape(24.dp)
   ) {
     Column(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(18.dp),
+        .padding(20.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.spacedBy(12.dp)
+      verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-      Icon(
-        imageVector = Icons.Filled.ErrorOutline,
-        contentDescription = "Error",
-        tint = CoralAccent,
-        modifier = Modifier.size(42.dp)
-      )
+      Box(
+        modifier = Modifier
+          .size(56.dp)
+          .clip(CircleShape)
+          .background(CoralAccent.copy(alpha = 0.15f))
+          .border(1.dp, CoralAccent.copy(alpha = 0.4f), CircleShape),
+        contentAlignment = Alignment.Center
+      ) {
+        Icon(
+          imageVector = icon,
+          contentDescription = title,
+          tint = CoralAccent,
+          modifier = Modifier.size(28.dp)
+        )
+      }
+
+      // Badge
+      Box(
+        modifier = Modifier
+          .clip(RoundedCornerShape(8.dp))
+          .background(CoralAccent.copy(alpha = 0.2f))
+          .border(1.dp, CoralAccent.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+          .padding(horizontal = 10.dp, vertical = 4.dp)
+      ) {
+        Text(
+          text = badgeText,
+          color = CoralAccent,
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Bold,
+          letterSpacing = 1.sp
+        )
+      }
 
       Text(
-        text = "Download Notice",
+        text = title,
         color = TextPrimary,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.Bold
+        fontSize = 17.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center
       )
 
       Text(
         text = message,
         color = TextSecondary,
         fontSize = 13.sp,
-        lineHeight = 18.sp
+        lineHeight = 19.sp,
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center
       )
 
-      Box(
-        modifier = Modifier
-          .clip(RoundedCornerShape(14.dp))
-          .background(GlassSurfaceDark)
-          .border(1.dp, GlassBorderLight, RoundedCornerShape(14.dp))
-          .clickable(onClick = onRetry)
-          .padding(horizontal = 20.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center
+      // Helpful guide box for YouTube or Webpage errors
+      if (errorType == DownloadErrorType.YOUTUBE_URL || errorType == DownloadErrorType.UNSUPPORTED_WEBPAGE) {
+        Box(
+          modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(GlassSurfaceDark)
+            .border(1.dp, GlassBorderLight, RoundedCornerShape(14.dp))
+            .padding(14.dp)
+        ) {
+          Row(
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          ) {
+            Icon(
+              imageVector = Icons.Filled.MusicNote,
+              contentDescription = null,
+              tint = CyanHighlight,
+              modifier = Modifier.size(18.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Text(
+                text = "Supported Audio in NEO GLASS X",
+                color = CyanHighlight,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+              )
+              Text(
+                text = "NEO GLASS X is an MP3-only music player. Please input direct URLs linking directly to .mp3 files (e.g. podcast feeds, direct audio file hosts, or server-hosted audio).",
+                color = TextSecondary,
+                fontSize = 11.sp,
+                lineHeight = 16.sp
+              )
+            }
+          }
+        }
+      }
+
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
       ) {
-        Text(
-          text = "Try Again",
-          color = CyanHighlight,
-          fontSize = 13.sp,
-          fontWeight = FontWeight.SemiBold
-        )
+        if (errorType == DownloadErrorType.HTTP_ERROR || errorType == DownloadErrorType.NETWORK_ERROR) {
+          // Retry button
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .height(44.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .background(
+                brush = Brush.horizontalGradient(listOf(RoyalBlue, VioletGaze))
+              )
+              .clickable(onClick = onRetry)
+              .testTag("error_retry_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Text(
+              text = "Try Again",
+              color = Color.White,
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Bold
+            )
+          }
+
+          // Reset button
+          Box(
+            modifier = Modifier
+              .weight(1f)
+              .height(44.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .background(GlassSurfaceDark)
+              .border(1.dp, GlassBorderLight, RoundedCornerShape(14.dp))
+              .clickable(onClick = onReset)
+              .testTag("error_dismiss_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Text(
+              text = "Clear",
+              color = TextPrimary,
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Medium
+            )
+          }
+        } else {
+          // Clear & Enter MP3 Link
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(44.dp)
+              .clip(RoundedCornerShape(14.dp))
+              .background(GlassSurfaceDark)
+              .border(1.dp, GlassBorderLight, RoundedCornerShape(14.dp))
+              .clickable(onClick = onReset)
+              .testTag("error_dismiss_button"),
+            contentAlignment = Alignment.Center
+          ) {
+            Text(
+              text = "Clear & Enter Direct MP3 Link",
+              color = CyanHighlight,
+              fontSize = 13.sp,
+              fontWeight = FontWeight.SemiBold
+            )
+          }
+        }
       }
     }
   }

@@ -42,6 +42,17 @@ data class MediaFormatOption(
   val sizeDisplay: String
 )
 
+enum class DownloadErrorType {
+  INVALID_URL,
+  YOUTUBE_URL,
+  UNSUPPORTED_WEBPAGE,
+  HTTP_ERROR,
+  CORRUPT_AUDIO,
+  NETWORK_ERROR,
+  CANCELLED,
+  GENERAL
+}
+
 sealed class DownloadState {
   object Idle : DownloadState()
   data class Analyzing(val url: String) : DownloadState()
@@ -54,7 +65,11 @@ sealed class DownloadState {
     val speedMBs: Float
   ) : DownloadState()
   data class Completed(val track: Track) : DownloadState()
-  data class Error(val message: String) : DownloadState()
+  data class Error(
+    val message: String,
+    val title: String = "Download Notice",
+    val errorType: DownloadErrorType = DownloadErrorType.GENERAL
+  ) : DownloadState()
 }
 
 class MediaDownloader(
@@ -70,28 +85,53 @@ class MediaDownloader(
   private val _state = MutableStateFlow<DownloadState>(DownloadState.Idle)
   val state: StateFlow<DownloadState> = _state.asStateFlow()
 
-  private var activeAnalysisJob: Job? = null
-  private var activeDownloadJob: Job? = null
+  private var activeCall: okhttp3.Call? = null
+  private var currentTempFile: File? = null
+
+  fun isYouTubeUrl(httpUrl: okhttp3.HttpUrl): Boolean {
+    val host = httpUrl.host.lowercase()
+    return host == "youtu.be" || host == "youtube.com" || host.endsWith(".youtube.com")
+  }
 
   suspend fun analyzeUrl(inputUrl: String) = withContext(Dispatchers.IO) {
     val cleanUrl = inputUrl.trim()
 
     // 1. Validate URL structure
     if (cleanUrl.isBlank()) {
-      _state.value = DownloadState.Error("Please enter a valid media link.")
+      _state.value = DownloadState.Error(
+        message = "Please enter a valid media link.",
+        title = "Empty Link",
+        errorType = DownloadErrorType.INVALID_URL
+      )
       return@withContext
     }
 
     val httpUrl = cleanUrl.toHttpUrlOrNull()
     if (httpUrl == null || (!httpUrl.scheme.equals("http", ignoreCase = true) && !httpUrl.scheme.equals("https", ignoreCase = true))) {
-      _state.value = DownloadState.Error("Invalid URL. Only HTTP and HTTPS links are supported.")
+      _state.value = DownloadState.Error(
+        message = "Invalid URL. Only HTTP and HTTPS links are supported.",
+        title = "Malformed URL",
+        errorType = DownloadErrorType.INVALID_URL
+      )
+      return@withContext
+    }
+
+    // 2. Detect YouTube URLs immediately
+    if (isYouTubeUrl(httpUrl)) {
+      val isShorts = httpUrl.encodedPath.contains("/shorts/")
+      val kind = if (isShorts) "YouTube Shorts" else "YouTube"
+      _state.value = DownloadState.Error(
+        title = "$kind Link Detected",
+        message = "Direct audio extraction from YouTube is not currently available. YouTube is a protected video streaming platform whose Terms of Service and access controls restrict unauthorized media extraction without official API permissions. NEO GLASS X supports direct MP3 audio stream URLs only.",
+        errorType = DownloadErrorType.YOUTUBE_URL
+      )
       return@withContext
     }
 
     _state.value = DownloadState.Analyzing(cleanUrl)
 
     try {
-      // 2. Probe URL: Try HEAD first, fall back to Range GET
+      // 3. Probe URL: Try HEAD first, fall back to Range GET
       var contentLength = -1L
       var contentType = ""
       var contentDisposition = ""
@@ -105,7 +145,9 @@ class MediaDownloader(
 
       var headSuccess = false
       try {
-        client.newCall(headRequest).execute().use { response ->
+        val headCall = client.newCall(headRequest)
+        activeCall = headCall
+        headCall.execute().use { response ->
           statusCode = response.code
           if (response.isSuccessful) {
             contentLength = response.header("Content-Length")?.toLongOrNull() ?: -1L
@@ -116,6 +158,8 @@ class MediaDownloader(
         }
       } catch (_: Exception) {
         headSuccess = false
+      } finally {
+        activeCall = null
       }
 
       // If HEAD was rejected (e.g. 405 Method Not Allowed) or failed, fall back to a limited GET
@@ -127,33 +171,55 @@ class MediaDownloader(
           .get()
           .build()
 
-        client.newCall(rangeGetRequest).execute().use { response ->
-          statusCode = response.code
-          if (!response.isSuccessful && response.code != 206) {
-            _state.value = DownloadState.Error("Server returned HTTP error ${response.code}: ${response.message}")
-            return@withContext
+        val getCall = client.newCall(rangeGetRequest)
+        activeCall = getCall
+        try {
+          getCall.execute().use { response ->
+            statusCode = response.code
+            if (!response.isSuccessful && response.code != 206) {
+              _state.value = DownloadState.Error(
+                title = "HTTP Error $statusCode",
+                message = "Server returned HTTP error ${response.code}: ${response.message}",
+                errorType = DownloadErrorType.HTTP_ERROR
+              )
+              return@withContext
+            }
+            val contentRange = response.header("Content-Range")
+            if (contentRange != null && contentRange.contains("/")) {
+              contentLength = contentRange.substringAfterLast("/").toLongOrNull() ?: -1L
+            } else {
+              contentLength = response.header("Content-Length")?.toLongOrNull() ?: -1L
+            }
+            contentType = response.header("Content-Type") ?: ""
+            contentDisposition = response.header("Content-Disposition") ?: ""
           }
-          val contentRange = response.header("Content-Range")
-          if (contentRange != null && contentRange.contains("/")) {
-            contentLength = contentRange.substringAfterLast("/").toLongOrNull() ?: -1L
-          } else {
-            contentLength = response.header("Content-Length")?.toLongOrNull() ?: -1L
-          }
-          contentType = response.header("Content-Type") ?: ""
-          contentDisposition = response.header("Content-Disposition") ?: ""
+        } finally {
+          activeCall = null
         }
       }
 
-      // 3. Inspect Content-Type: Webpages (HTML) are NOT downloadable audio streams
+      // 4. Inspect Content-Type: Webpages (HTML) are NOT downloadable audio streams
       val lowerContentType = contentType.lowercase()
       if (lowerContentType.contains("text/html") || lowerContentType.contains("application/xhtml")) {
         _state.value = DownloadState.Error(
-          "The provided link points to a web page (HTML), not a direct MP3 audio stream. Webpage streaming platforms require direct stream URLs."
+          title = "Unsupported Webpage",
+          message = "The provided link points to a web page (HTML) on ${httpUrl.host}, not a direct MP3 audio stream. Webpage streaming platforms require direct stream URLs.",
+          errorType = DownloadErrorType.UNSUPPORTED_WEBPAGE
         )
         return@withContext
       }
 
-      // 4. Derive clean, honest title
+      // 5. Inspect Content-Type: Disallow video formats (MP3-only player)
+      if (lowerContentType.startsWith("video/") || lowerContentType.contains("application/vnd.apple.mpegurl")) {
+        _state.value = DownloadState.Error(
+          title = "Video Stream Detected",
+          message = "NEO GLASS X is an MP3 audio-only player. The linked resource is a video stream ($contentType). Please provide a direct MP3 audio stream link.",
+          errorType = DownloadErrorType.UNSUPPORTED_WEBPAGE
+        )
+        return@withContext
+      }
+
+      // 6. Derive clean, honest title
       var derivedTitle = ""
       if (contentDisposition.isNotBlank() && contentDisposition.contains("filename=")) {
         val rawFilename = contentDisposition.substringAfter("filename=").substringBefore(";").trim('"', '\'')
@@ -181,7 +247,7 @@ class MediaDownloader(
       val host = httpUrl.host
       val derivedArtist = if (host.isNotBlank()) host else "Direct Source"
 
-      // 5. Only MP3 is supported — no video, no mp4 options
+      // 7. Only MP3 is supported — no video, no mp4 options
       val formatOption = MediaFormatOption(
         label = "MP3 Audio",
         extension = "mp3",
@@ -203,7 +269,11 @@ class MediaDownloader(
       _state.value = DownloadState.Ready(mediaInfo)
     } catch (e: Exception) {
       if (e is CancellationException) throw e
-      _state.value = DownloadState.Error("Failed to analyze link: ${e.localizedMessage ?: "Network connection error"}")
+      _state.value = DownloadState.Error(
+        title = "Connection Failed",
+        message = "Failed to analyze link: ${e.localizedMessage ?: "Network connection error"}",
+        errorType = DownloadErrorType.NETWORK_ERROR
+      )
     }
   }
 
@@ -220,6 +290,7 @@ class MediaDownloader(
     if (!musicDir.exists()) musicDir.mkdirs()
 
     val tempFile = File(musicDir, "download_${UUID.randomUUID()}.tmp")
+    currentTempFile = tempFile
     val safeFileName = mediaInfo.title.replace(Regex("[^a-zA-Z0-9.-]"), "_").take(40)
     val destFile = File(musicDir, "${safeFileName}_${System.currentTimeMillis()}.mp3")
 
@@ -231,15 +302,25 @@ class MediaDownloader(
         .header("User-Agent", "NEO-GLASS-X-Downloader/1.0")
         .build()
 
-      val response = client.newCall(request).execute()
+      val downloadCall = client.newCall(request)
+      activeCall = downloadCall
+      val response = downloadCall.execute()
       if (!response.isSuccessful) {
-        _state.value = DownloadState.Error("Download failed with HTTP ${response.code}: ${response.message}")
+        _state.value = DownloadState.Error(
+          title = "Download Failed",
+          message = "Download failed with HTTP ${response.code}: ${response.message}",
+          errorType = DownloadErrorType.HTTP_ERROR
+        )
         return@withContext
       }
 
       val body = response.body
       if (body == null) {
-        _state.value = DownloadState.Error("Empty audio stream received from server.")
+        _state.value = DownloadState.Error(
+          title = "Empty Stream",
+          message = "Empty audio stream received from server.",
+          errorType = DownloadErrorType.CORRUPT_AUDIO
+        )
         return@withContext
       }
 
@@ -285,16 +366,18 @@ class MediaDownloader(
         }
       }
 
-      // 6. Verify downloaded content is valid MP3
+      // 8. Verify downloaded content is valid MP3
       if (!isValidMp3File(tempFile)) {
         tempFile.delete()
         _state.value = DownloadState.Error(
-          "The downloaded file is not valid MP3 audio or contains corrupt data. Download was discarded."
+          title = "Corrupt Audio Stream",
+          message = "The downloaded file is not valid MP3 audio or contains corrupt data. Download was discarded.",
+          errorType = DownloadErrorType.CORRUPT_AUDIO
         )
         return@withContext
       }
 
-      // 7. Atomically rename to final .mp3 file
+      // 9. Atomically rename to final .mp3 file
       if (tempFile.renameTo(destFile)) {
         downloadSuccess = true
       } else {
@@ -304,7 +387,7 @@ class MediaDownloader(
         downloadSuccess = true
       }
 
-      // 8. Extract real duration and tags from actual file
+      // 10. Extract real duration and tags from actual file
       val realDurationMs = extractMediaDuration(destFile)
 
       val downloadedTrack = Track(
@@ -328,16 +411,34 @@ class MediaDownloader(
       _state.value = DownloadState.Completed(downloadedTrack)
     } catch (e: Exception) {
       if (e is CancellationException) throw e
-      _state.value = DownloadState.Error("Download interrupted: ${e.localizedMessage ?: "Network transfer error"}")
+      _state.value = DownloadState.Error(
+        title = "Download Interrupted",
+        message = "Download interrupted: ${e.localizedMessage ?: "Network transfer error"}",
+        errorType = DownloadErrorType.NETWORK_ERROR
+      )
     } finally {
+      activeCall = null
+      currentTempFile = null
       if (!downloadSuccess && tempFile.exists()) {
         tempFile.delete()
       }
     }
   }
 
-  fun reset() {
+  fun cancel() {
+    try {
+      activeCall?.cancel()
+    } catch (_: Exception) {}
+    activeCall = null
+    currentTempFile?.let {
+      if (it.exists()) it.delete()
+    }
+    currentTempFile = null
     _state.value = DownloadState.Idle
+  }
+
+  fun reset() {
+    cancel()
   }
 
   private fun isValidMp3File(file: File): Boolean {

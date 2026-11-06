@@ -20,11 +20,13 @@
    - Webpage (HTML) links rejected with direct diagnostic message.
    - Download validation: ID3v2 and MPEG frame sync word (`0xFFE0`) verification ensures only genuine MP3 files are accepted and indexed.
    - Direct audio indexed into Room Database and app-specific Music storage.
-3. **Audio Playback Engine**:
-   - High-fidelity Android `MediaPlayer` wrapped in `PlaybackManager`.
-   - AudioFocus handling via `AudioFocusRequest` (API 26+) and legacy listener.
-   - Full scrubber seeking, real duration calculation, shuffle, and repeat modes (OFF, ALL, ONE).
-   - Docked persistent mini-player and fullscreen immersive player with visualizer equalizer bars and queue sheet.
+3. **Audio Playback Engine Repair**:
+   - Resolved root cause of playback failure: `FileInputStream(file).use { fis -> player.setDataSource(fis.fd) }` was prematurely closing file descriptors before `prepareAsync()` could execute. Switched to direct file path specification (`player.setDataSource(file.absolutePath)`).
+   - Moved MediaPlayer initialization to Main thread with Looper safety, while isolating file access checks on `Dispatchers.IO`.
+   - Added `BecomingNoisyReceiver` for graceful pausing on headphone unplug.
+   - Immediate UI synchronization of track and queue state on play requests.
+   - Surfaced playback errors in `PlayerScreen` and `MiniPlayerBar` with retry affordance.
+   - Synchronized offline files from disk into Room on startup via `TrackRepository.syncOfflineFiles()`.
 4. **Zero Mock Data Policy**:
    - All demo tracks purged.
    - Pure real storage persistence via Room.
@@ -34,4 +36,4 @@
 
 ## 3. Test & Verification Log
 - `compile_applet`: **BUILD SUCCEEDED**
-- `gradle :app:testDebugUnitTest`: **BUILD SUCCESSFUL in 46s** (33 actionable tasks executed, 0 failures, all 11 unit & Robolectric tests passing).
+- `gradle :app:testDebugUnitTest`: **BUILD SUCCESSFUL in 44s** (33 actionable tasks executed, 0 failures, all 18 unit & Robolectric CUJ tests passing, including valid local MP3, pause/resume, seeking, queue navigation, downloaded MP3 playback, and missing file handling).

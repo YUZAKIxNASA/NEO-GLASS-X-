@@ -2,6 +2,7 @@ package com.example
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.downloader.DownloadErrorType
 import com.example.data.downloader.DownloadState
 import com.example.data.downloader.MediaDownloader
 import com.example.data.model.Track
@@ -245,5 +246,90 @@ class NeoGlassXDownloaderTest {
       artworkUrl = ""
     )
     assertEquals("1:05", track2.formattedDuration)
+  }
+
+  @Test
+  fun testYouTubeUrlDetectionWithStandardLink() = runBlocking {
+    val youtubeUrl = "https://www.youtube.com/watch?v=orgSuS89674"
+    downloader.analyzeUrl(youtubeUrl)
+
+    val state = downloader.state.value
+    assertTrue("Expected Error state for YouTube link but got $state", state is DownloadState.Error)
+    val error = state as DownloadState.Error
+    assertEquals(DownloadErrorType.YOUTUBE_URL, error.errorType)
+    assertEquals("YouTube Link Detected", error.title)
+    assertTrue(error.message.contains("YouTube is a protected video streaming platform", ignoreCase = true))
+    assertTrue(error.message.contains("direct MP3", ignoreCase = true))
+  }
+
+  @Test
+  fun testYouTubeUrlDetectionWithYouTuBeShortLink() = runBlocking {
+    // The exact link format from the user's reported screenshot
+    val youtuBeUrl = "https://youtu.be/orgSuS89674?si=tQ5s948test"
+    downloader.analyzeUrl(youtuBeUrl)
+
+    val state = downloader.state.value
+    assertTrue("Expected Error state for youtu.be link but got $state", state is DownloadState.Error)
+    val error = state as DownloadState.Error
+    assertEquals(DownloadErrorType.YOUTUBE_URL, error.errorType)
+    assertEquals("YouTube Link Detected", error.title)
+  }
+
+  @Test
+  fun testYouTubeUrlDetectionWithShortsLink() = runBlocking {
+    val shortsUrl = "https://www.youtube.com/shorts/orgSuS89674"
+    downloader.analyzeUrl(shortsUrl)
+
+    val state = downloader.state.value
+    assertTrue("Expected Error state for YouTube Shorts link but got $state", state is DownloadState.Error)
+    val error = state as DownloadState.Error
+    assertEquals(DownloadErrorType.YOUTUBE_URL, error.errorType)
+    assertEquals("YouTube Shorts Link Detected", error.title)
+  }
+
+  @Test
+  fun testUnsupportedWebpageClassification() = runBlocking {
+    server.enqueue(
+      MockResponse()
+        .setResponseCode(200)
+        .setHeader("Content-Type", "text/html; charset=utf-8")
+        .setBody("<!DOCTYPE html><html><body><h1>Documentation Page</h1></body></html>")
+    )
+
+    val url = server.url("/docs/guide.html").toString()
+    downloader.analyzeUrl(url)
+
+    val state = downloader.state.value
+    assertTrue("Expected Error state for HTML page but got $state", state is DownloadState.Error)
+    val error = state as DownloadState.Error
+    assertEquals(DownloadErrorType.UNSUPPORTED_WEBPAGE, error.errorType)
+    assertEquals("Unsupported Webpage", error.title)
+    assertTrue(error.message.contains("web page (HTML)", ignoreCase = true))
+  }
+
+  @Test
+  fun testVideoStreamClassification() = runBlocking {
+    server.enqueue(
+      MockResponse()
+        .setResponseCode(200)
+        .setHeader("Content-Type", "video/mp4")
+        .setHeader("Content-Length", "10485760")
+    )
+
+    val url = server.url("/clip.mp4").toString()
+    downloader.analyzeUrl(url)
+
+    val state = downloader.state.value
+    assertTrue("Expected Error state for video stream but got $state", state is DownloadState.Error)
+    val error = state as DownloadState.Error
+    assertEquals(DownloadErrorType.UNSUPPORTED_WEBPAGE, error.errorType)
+    assertEquals("Video Stream Detected", error.title)
+    assertTrue(error.message.contains("video stream", ignoreCase = true))
+  }
+
+  @Test
+  fun testDownloadCancellation() = runBlocking {
+    downloader.cancel()
+    assertEquals(DownloadState.Idle, downloader.state.value)
   }
 }

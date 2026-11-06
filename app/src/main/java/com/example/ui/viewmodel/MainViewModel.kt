@@ -75,7 +75,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
   init {
     viewModelScope.launch {
       repository.clearDemoTracksIfAny()
+      repository.syncOfflineFiles()
     }
+  }
+
+  fun clearPlaybackError() {
+    playbackManager.clearError()
   }
 
   fun selectTab(tab: AppTab) {
@@ -142,6 +147,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
   fun resetDownloader() {
     downloader.reset()
+  }
+
+  fun cancelDownload() {
+    downloader.cancel()
   }
 
   override fun onCleared() {
