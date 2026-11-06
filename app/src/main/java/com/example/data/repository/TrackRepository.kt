@@ -1,16 +1,22 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.net.Uri
+import android.os.Environment
 import com.example.data.db.AppDatabase
 import com.example.data.db.TrackEntity
+import com.example.data.metadata.AudioMetadataExtractor
+import com.example.data.metadata.ExtractedAudioMetadata
 import com.example.data.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class TrackRepository(private val context: Context) {
   private val trackDao = AppDatabase.getDatabase(context).trackDao()
+  private val metadataExtractor = AudioMetadataExtractor(context)
 
   fun getAllTracks(): Flow<List<Track>> =
     trackDao.getAllTracks().map { list -> list.map { it.toTrack() } }
@@ -37,7 +43,6 @@ class TrackRepository(private val context: Context) {
   }
 
   suspend fun clearDemoTracksIfAny() = withContext(Dispatchers.IO) {
-    // Ensure no mock demo tracks exist in the database
     val demoIds = listOf(
       "track_1", "track_2", "track_3", "track_4",
       "track_5", "track_6", "track_7", "track_8"
@@ -47,45 +52,99 @@ class TrackRepository(private val context: Context) {
     }
   }
 
+  fun extractMetadata(file: File, fallbackTitle: String? = null, fallbackArtist: String? = null): ExtractedAudioMetadata {
+    return metadataExtractor.extract(file, fallbackTitle, fallbackArtist)
+  }
+
   suspend fun syncOfflineFiles() = withContext(Dispatchers.IO) {
     try {
-      val musicDir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC) ?: context.filesDir
-      if (musicDir.exists()) {
-        val mp3Files = musicDir.listFiles { _, name -> name.endsWith(".mp3", ignoreCase = true) } ?: emptyArray()
-        for (file in mp3Files) {
-          if (file.length() > 64) {
-            val existing = trackDao.getTrackById(file.name)
-            if (existing == null) {
-              val title = file.nameWithoutExtension.replace(Regex("_\\d+$"), "").replace("_", " ")
-              val retriever = android.media.MediaMetadataRetriever()
-              var dur = 180000L
-              var artist = "Offline Artist"
-              try {
-                retriever.setDataSource(file.absolutePath)
-                dur = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 180000L
-                val extractedArtist = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
-                if (!extractedArtist.isNullOrBlank()) artist = extractedArtist
-                retriever.release()
-              } catch (_: Exception) {}
+      val musicDirs = listOfNotNull(
+        context.getExternalFilesDir(Environment.DIRECTORY_MUSIC),
+        context.filesDir
+      )
 
-              val track = Track(
-                id = file.name,
-                title = title,
-                artist = artist,
-                album = "NEO GLASS X Downloads",
-                durationMs = dur,
-                streamUrl = android.net.Uri.fromFile(file).toString(),
-                localPath = file.absolutePath,
-                artworkUrl = "",
-                isFavorite = false,
-                category = "Downloaded",
-                isDownloaded = true,
-                format = "MP3",
-                isVideo = false,
-                addedAt = file.lastModified()
-              )
-              insertTrack(track)
-            }
+      val foundFiles = mutableListOf<File>()
+      for (dir in musicDirs) {
+        if (dir.exists()) {
+          val files = dir.listFiles { _, name -> name.endsWith(".mp3", ignoreCase = true) } ?: emptyArray()
+          foundFiles.addAll(files.filter { it.length() > 64 })
+        }
+      }
+
+      val existingTracks = trackDao.getAllTracksSnapshot()
+      val existingByPath = existingTracks.associateBy { it.localPath }
+      val existingById = existingTracks.associateBy { it.id }
+
+      // 1. Ingest or update files found on disk
+      for (file in foundFiles) {
+        val existing = existingByPath[file.absolutePath] ?: existingById[file.name]
+        val meta = metadataExtractor.extract(file)
+        val artworkUri = meta.artworkPath?.let { Uri.fromFile(File(it)).toString() } ?: ""
+
+        if (existing == null) {
+          val track = Track(
+            id = file.name,
+            title = meta.title,
+            artist = meta.artist,
+            album = meta.album,
+            durationMs = if (meta.durationMs > 0) meta.durationMs else 180000L,
+            streamUrl = Uri.fromFile(file).toString(),
+            localPath = file.absolutePath,
+            artworkUrl = artworkUri,
+            isFavorite = false,
+            category = meta.genre ?: "Downloaded",
+            isDownloaded = true,
+            format = "MP3",
+            isVideo = false,
+            addedAt = file.lastModified(),
+            albumArtist = meta.albumArtist,
+            genre = meta.genre,
+            year = meta.year,
+            trackNumber = meta.trackNumber
+          )
+          trackDao.insertTrack(TrackEntity.fromTrack(track))
+        } else {
+          // If artwork or metadata can be enriched, update without destroying favorite status
+          var needsUpdate = false
+          var updatedArtwork = existing.artworkUrl
+          if (updatedArtwork.isBlank() && artworkUri.isNotBlank()) {
+            updatedArtwork = artworkUri
+            needsUpdate = true
+          }
+
+          val updatedTitle = if (existing.title.isBlank() || existing.title == "Direct Audio Track") {
+            needsUpdate = true
+            meta.title
+          } else existing.title
+
+          val updatedArtist = if (existing.artist.isBlank() || existing.artist == "Offline Artist" || existing.artist == "Direct Source") {
+            needsUpdate = true
+            meta.artist
+          } else existing.artist
+
+          if (needsUpdate) {
+            val updatedTrack = existing.copy(
+              title = updatedTitle,
+              artist = updatedArtist,
+              album = if (existing.album == "Unknown Album" || existing.album == "NEO GLASS X Downloads") meta.album else existing.album,
+              artworkUrl = updatedArtwork,
+              durationMs = if (existing.durationMs <= 0 && meta.durationMs > 0) meta.durationMs else existing.durationMs,
+              albumArtist = existing.albumArtist ?: meta.albumArtist,
+              genre = existing.genre ?: meta.genre,
+              year = existing.year ?: meta.year,
+              trackNumber = existing.trackNumber ?: meta.trackNumber
+            )
+            trackDao.updateTrack(updatedTrack)
+          }
+        }
+      }
+
+      // 2. Safe orphaned track cleanup: remove DB records whose physical file was deleted
+      val foundPaths = foundFiles.map { it.absolutePath }.toSet()
+      for (existing in existingTracks) {
+        if (existing.isDownloaded && existing.localPath != null && !foundPaths.contains(existing.localPath)) {
+          if (!File(existing.localPath).exists()) {
+            trackDao.deleteTrackById(existing.id)
           }
         }
       }

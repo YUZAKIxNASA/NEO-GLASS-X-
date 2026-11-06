@@ -25,6 +25,12 @@ interface TrackDao {
   @Query("SELECT * FROM tracks WHERE id = :id LIMIT 1")
   suspend fun getTrackById(id: String): TrackEntity?
 
+  @Query("SELECT * FROM tracks WHERE localPath = :localPath LIMIT 1")
+  suspend fun getTrackByLocalPath(localPath: String): TrackEntity?
+
+  @Query("SELECT * FROM tracks")
+  suspend fun getAllTracksSnapshot(): List<TrackEntity>
+
   @Query("SELECT COUNT(*) FROM tracks")
   suspend fun getTrackCount(): Int
 

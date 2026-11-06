@@ -5,13 +5,25 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [TrackEntity::class], version = 2, exportSchema = false)
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
+
+@Database(entities = [TrackEntity::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
   abstract fun trackDao(): TrackDao
 
   companion object {
     @Volatile
     private var INSTANCE: AppDatabase? = null
+
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tracks ADD COLUMN albumArtist TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE tracks ADD COLUMN genre TEXT DEFAULT NULL")
+        db.execSQL("ALTER TABLE tracks ADD COLUMN year INTEGER DEFAULT NULL")
+        db.execSQL("ALTER TABLE tracks ADD COLUMN trackNumber INTEGER DEFAULT NULL")
+      }
+    }
 
     fun getDatabase(context: Context): AppDatabase {
       return INSTANCE ?: synchronized(this) {
@@ -20,7 +32,8 @@ abstract class AppDatabase : RoomDatabase() {
           AppDatabase::class.java,
           "neonwave_database"
         )
-          .fallbackToDestructiveMigration()
+          .addMigrations(MIGRATION_2_3)
+          .fallbackToDestructiveMigrationOnDowngrade()
           .build()
         INSTANCE = instance
         instance

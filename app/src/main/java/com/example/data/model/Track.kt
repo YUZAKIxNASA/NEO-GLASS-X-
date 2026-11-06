@@ -14,7 +14,11 @@ data class Track(
   val isDownloaded: Boolean = false,
   val format: String = "MP3",
   val isVideo: Boolean = false,
-  val addedAt: Long = System.currentTimeMillis()
+  val addedAt: Long = System.currentTimeMillis(),
+  val albumArtist: String? = null,
+  val genre: String? = null,
+  val year: Int? = null,
+  val trackNumber: Int? = null
 ) {
   val formattedDuration: String
     get() {

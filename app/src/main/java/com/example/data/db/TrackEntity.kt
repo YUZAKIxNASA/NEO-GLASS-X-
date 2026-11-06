@@ -19,7 +19,11 @@ data class TrackEntity(
   val isDownloaded: Boolean,
   val format: String,
   val isVideo: Boolean,
-  val addedAt: Long
+  val addedAt: Long,
+  val albumArtist: String? = null,
+  val genre: String? = null,
+  val year: Int? = null,
+  val trackNumber: Int? = null
 ) {
   fun toTrack(): Track = Track(
     id = id,
@@ -35,7 +39,11 @@ data class TrackEntity(
     isDownloaded = isDownloaded,
     format = format,
     isVideo = isVideo,
-    addedAt = addedAt
+    addedAt = addedAt,
+    albumArtist = albumArtist,
+    genre = genre,
+    year = year,
+    trackNumber = trackNumber
   )
 
   companion object {
@@ -53,7 +61,11 @@ data class TrackEntity(
       isDownloaded = track.isDownloaded,
       format = track.format,
       isVideo = track.isVideo,
-      addedAt = track.addedAt
+      addedAt = track.addedAt,
+      albumArtist = track.albumArtist,
+      genre = track.genre,
+      year = track.year,
+      trackNumber = track.trackNumber
     )
   }
 }

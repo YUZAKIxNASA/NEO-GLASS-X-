@@ -198,26 +198,28 @@ fun PlayerScreen(
             .background(GlassSurfaceDark)
             .border(1.5.dp, LavenderGlass.copy(alpha = 0.4f), RoundedCornerShape(32.dp))
         ) {
-          if (track.artworkUrl.isNotBlank()) {
-            AsyncImage(
-              model = track.artworkUrl,
-              contentDescription = track.title,
-              contentScale = ContentScale.Crop,
-              modifier = Modifier.fillMaxSize()
-            )
-          } else {
-            Box(
-              modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.radialGradient(listOf(RoyalBlue, AtmosphereDeep))),
-              contentAlignment = Alignment.Center
-            ) {
-              Icon(
-                imageVector = Icons.Filled.MusicNote,
-                contentDescription = null,
-                tint = CyanHighlight,
-                modifier = Modifier.size(72.dp)
+          androidx.compose.runtime.key(track.id) {
+            if (track.artworkUrl.isNotBlank()) {
+              AsyncImage(
+                model = track.artworkUrl,
+                contentDescription = track.title,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
               )
+            } else {
+              Box(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .background(Brush.radialGradient(listOf(RoyalBlue, AtmosphereDeep))),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Filled.MusicNote,
+                  contentDescription = null,
+                  tint = CyanHighlight,
+                  modifier = Modifier.size(72.dp)
+                )
+              }
             }
           }
 
@@ -291,11 +293,19 @@ fun PlayerScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
+        val subtitle = if (track.album.isNotBlank() && track.album != "Unknown Album") {
+          "${track.artist} • ${track.album}"
+        } else {
+          track.artist
+        }
+
         Text(
-          text = track.artist,
+          text = subtitle,
           color = TextSecondary,
           fontSize = 15.sp,
-          fontWeight = FontWeight.Normal
+          fontWeight = FontWeight.Normal,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
         )
       }
 
@@ -543,14 +553,29 @@ fun PlayerScreen(
               .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
-            AsyncImage(
-              model = nextTrack.artworkUrl,
-              contentDescription = nextTrack.title,
-              contentScale = ContentScale.Crop,
+            Box(
               modifier = Modifier
                 .size(42.dp)
                 .clip(RoundedCornerShape(12.dp))
-            )
+                .background(RoyalBlue.copy(alpha = 0.4f)),
+              contentAlignment = Alignment.Center
+            ) {
+              if (nextTrack.artworkUrl.isNotBlank()) {
+                AsyncImage(
+                  model = nextTrack.artworkUrl,
+                  contentDescription = nextTrack.title,
+                  contentScale = ContentScale.Crop,
+                  modifier = Modifier.fillMaxSize()
+                )
+              } else {
+                Icon(
+                  imageVector = Icons.Filled.MusicNote,
+                  contentDescription = null,
+                  tint = CyanHighlight,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+            }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
               Text(
@@ -621,14 +646,29 @@ fun PlayerScreen(
                     .padding(horizontal = 12.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  AsyncImage(
-                    model = qTrack.artworkUrl,
-                    contentDescription = qTrack.title,
+                  Box(
                     modifier = Modifier
                       .size(38.dp)
-                      .clip(RoundedCornerShape(10.dp)),
-                    contentScale = ContentScale.Crop
-                  )
+                      .clip(RoundedCornerShape(10.dp))
+                      .background(RoyalBlue.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                  ) {
+                    if (qTrack.artworkUrl.isNotBlank()) {
+                      AsyncImage(
+                        model = qTrack.artworkUrl,
+                        contentDescription = qTrack.title,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                      )
+                    } else {
+                      Icon(
+                        imageVector = Icons.Filled.MusicNote,
+                        contentDescription = null,
+                        tint = CyanHighlight,
+                        modifier = Modifier.size(18.dp)
+                      )
+                    }
+                  }
                   Spacer(modifier = Modifier.width(10.dp))
                   Column(modifier = Modifier.weight(1f)) {
                     Text(

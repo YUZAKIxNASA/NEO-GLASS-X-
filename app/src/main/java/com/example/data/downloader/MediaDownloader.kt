@@ -387,24 +387,29 @@ class MediaDownloader(
         downloadSuccess = true
       }
 
-      // 10. Extract real duration and tags from actual file
-      val realDurationMs = extractMediaDuration(destFile)
+      // 10. Extract real metadata and embedded artwork from actual file
+      val meta = repository.extractMetadata(destFile, fallbackTitle = mediaInfo.title, fallbackArtist = mediaInfo.artist)
+      val artworkUri = meta.artworkPath?.let { Uri.fromFile(File(it)).toString() } ?: ""
 
       val downloadedTrack = Track(
         id = UUID.randomUUID().toString(),
-        title = mediaInfo.title,
-        artist = mediaInfo.artist,
-        album = "NEO GLASS X Downloads",
-        durationMs = if (realDurationMs > 0) realDurationMs else 180000L,
+        title = meta.title,
+        artist = meta.artist,
+        album = if (meta.album != "Unknown Album") meta.album else "NEO GLASS X Downloads",
+        durationMs = if (meta.durationMs > 0) meta.durationMs else 180000L,
         streamUrl = Uri.fromFile(destFile).toString(),
         localPath = destFile.absolutePath,
-        artworkUrl = "",
+        artworkUrl = artworkUri,
         isFavorite = false,
-        category = "Downloaded",
+        category = meta.genre ?: "Downloaded",
         isDownloaded = true,
         format = "MP3",
         isVideo = false,
-        addedAt = System.currentTimeMillis()
+        addedAt = System.currentTimeMillis(),
+        albumArtist = meta.albumArtist,
+        genre = meta.genre,
+        year = meta.year,
+        trackNumber = meta.trackNumber
       )
 
       repository.insertTrack(downloadedTrack)

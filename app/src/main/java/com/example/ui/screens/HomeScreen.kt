@@ -597,15 +597,17 @@ private fun TrackRowCard(
       verticalAlignment = Alignment.CenterVertically
     ) {
       if (track.artworkUrl.isNotBlank()) {
-        AsyncImage(
-          model = track.artworkUrl,
-          contentDescription = track.title,
-          contentScale = ContentScale.Crop,
-          modifier = Modifier
-            .size(46.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, GlassBorderSubtle, RoundedCornerShape(12.dp))
-        )
+        androidx.compose.runtime.key(track.id) {
+          AsyncImage(
+            model = track.artworkUrl,
+            contentDescription = track.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+              .size(46.dp)
+              .clip(RoundedCornerShape(12.dp))
+              .border(1.dp, GlassBorderSubtle, RoundedCornerShape(12.dp))
+          )
+        }
       } else {
         Box(
           modifier = Modifier

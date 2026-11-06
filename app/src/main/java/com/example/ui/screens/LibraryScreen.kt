@@ -322,15 +322,32 @@ private fun LibraryTrackRow(
       verticalAlignment = Alignment.CenterVertically
     ) {
       // Thumbnail
-      AsyncImage(
-        model = track.artworkUrl,
-        contentDescription = track.title,
-        contentScale = ContentScale.Crop,
+      Box(
         modifier = Modifier
           .size(48.dp)
           .clip(RoundedCornerShape(14.dp))
-          .border(1.dp, GlassBorderSubtle, RoundedCornerShape(14.dp))
-      )
+          .background(RoyalBlue.copy(alpha = 0.4f))
+          .border(1.dp, GlassBorderSubtle, RoundedCornerShape(14.dp)),
+        contentAlignment = Alignment.Center
+      ) {
+        if (track.artworkUrl.isNotBlank()) {
+          androidx.compose.runtime.key(track.id) {
+            AsyncImage(
+              model = track.artworkUrl,
+              contentDescription = track.title,
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.fillMaxSize()
+            )
+          }
+        } else {
+          Icon(
+            imageVector = Icons.Filled.MusicNote,
+            contentDescription = null,
+            tint = CyanHighlight,
+            modifier = Modifier.size(24.dp)
+          )
+        }
+      }
 
       Spacer(modifier = Modifier.width(14.dp))
 

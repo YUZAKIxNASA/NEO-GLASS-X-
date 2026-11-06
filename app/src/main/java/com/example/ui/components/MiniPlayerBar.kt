@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -112,15 +114,32 @@ fun MiniPlayerBar(
         verticalAlignment = Alignment.CenterVertically
       ) {
         // Thumbnail
-        AsyncImage(
-          model = track.artworkUrl,
-          contentDescription = "Track Artwork",
-          contentScale = ContentScale.Crop,
+        Box(
           modifier = Modifier
             .size(46.dp)
             .clip(RoundedCornerShape(12.dp))
-            .border(1.dp, Color(0x33B6A8FF), RoundedCornerShape(12.dp))
-        )
+            .background(Color(0x3328377C))
+            .border(1.dp, Color(0x33B6A8FF), RoundedCornerShape(12.dp)),
+          contentAlignment = Alignment.Center
+        ) {
+          if (track.artworkUrl.isNotBlank()) {
+            androidx.compose.runtime.key(track.id) {
+              AsyncImage(
+                model = track.artworkUrl,
+                contentDescription = "Track Artwork",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+              )
+            }
+          } else {
+            Icon(
+              imageVector = Icons.Filled.MusicNote,
+              contentDescription = null,
+              tint = CyanHighlight,
+              modifier = Modifier.size(22.dp)
+            )
+          }
+        }
 
         Spacer(modifier = Modifier.width(12.dp))
 
